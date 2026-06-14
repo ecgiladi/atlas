@@ -5,6 +5,7 @@ from app.loaders.countries_src import parse_countries, slugify
 from app.loaders.geo import flight_from_tlv_minutes
 from app.loaders.seed_countries import assemble
 from app.loaders.visa_src import classify_visa_status, parse_visa
+from app.models.enums import VisaStatus
 
 
 # --- geo ---
@@ -18,13 +19,21 @@ def test_flight_minutes_reasonable():
 
 # --- visa classification ---
 def test_classify_visa_status():
-    assert classify_visa_status("Visa not required") is False
-    assert classify_visa_status("Visa-free") is False
-    assert classify_visa_status("Visa on arrival") is False
-    assert classify_visa_status("eVisa") is True
-    assert classify_visa_status("Visa required") is True
-    assert classify_visa_status("Admission refused") is True
-    assert classify_visa_status("Some unknown phrasing") is True  # safe default
+    assert classify_visa_status("Visa not required") is VisaStatus.visa_free
+    assert classify_visa_status("Visa-free") is VisaStatus.visa_free
+    assert classify_visa_status("Visa on arrival") is VisaStatus.voa
+    assert classify_visa_status("eVisa") is VisaStatus.eta_evisa
+    assert classify_visa_status("eTA") is VisaStatus.eta_evisa
+    assert classify_visa_status("Visa Waiver Program") is VisaStatus.eta_evisa  # ESTA
+    assert classify_visa_status("Visa required") is VisaStatus.visa_required
+    assert classify_visa_status("Admission refused") is VisaStatus.visa_required
+    assert classify_visa_status("Some unknown phrasing") is VisaStatus.visa_required
+
+
+def test_classify_visa_combo_picks_easiest():
+    # combo cell -> easiest available (eVisa easier than VoA per ordinal)
+    assert classify_visa_status("Visa on arrival / eVisa") is VisaStatus.eta_evisa
+    assert classify_visa_status("Visa on arrival; visa required") is VisaStatus.voa
 
 
 _VISA_HTML = """
@@ -39,9 +48,9 @@ _VISA_HTML = """
 
 def test_parse_visa_strips_refs_and_classifies():
     out = parse_visa(_VISA_HTML)
-    assert out["japan"] == (False, "Visa not required — 90 days")
-    assert out["thailand"][0] is True
-    assert out["united states"][0] is True  # eVisa -> must arrange
+    assert out["japan"] == (VisaStatus.visa_free, "Visa not required — 90 days")
+    assert out["thailand"][0] is VisaStatus.visa_required
+    assert out["united states"][0] is VisaStatus.eta_evisa  # eVisa
     assert "[" not in out["japan"][1]  # footnotes stripped
 
 
@@ -98,7 +107,7 @@ def _recs():
 
 def test_assemble_dedups_continents_and_is_deterministic():
     cost = {"JPN": (66, 2024)}
-    visa = {"japan": (False, "Visa not required")}
+    visa = {"JP": (VisaStatus.visa_free, "Visa not required")}  # keyed by cca2
     p1 = assemble(_recs(), cost, visa)
     p2 = assemble(_recs(), cost, visa)
     # 2 continents (Asia once, Europe once) despite 2 Asian countries
@@ -110,7 +119,7 @@ def test_assemble_dedups_continents_and_is_deterministic():
     jp = next(c for c in p1.countries if c.cca2 == "JP")
     fields = {f for f, _u, _n in jp.provenance}
     assert {"name_en", "name_he", "geo", "flight_from_tlv_minutes",
-            "cost_vs_israel", "visa_israeli_required"} <= fields
+            "cost_vs_israel", "visa_status"} <= fields
     th = next(c for c in p1.countries if c.cca2 == "TH")
     assert th.cost_vs_israel is None  # no cost fixture for THA
     assert not any(f == "cost_vs_israel" for f, _u, _n in th.provenance)

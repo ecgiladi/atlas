@@ -7,7 +7,7 @@ a light city, while the city's own values override.
 import uuid
 
 from app.inheritance import resolve_inherited, resolved_values
-from app.models.enums import FlightPriceBand, Level, SafetyLevel
+from app.models.enums import FlightPriceBand, Level, SafetyLevel, VisaStatus
 from app.models.place import Place
 
 
@@ -28,7 +28,7 @@ def _chain():
         flight_from_tlv_minutes=780,
         flight_direct=False,
         flight_price_band=FlightPriceBand.high,
-        visa_israeli_required=False,
+        visa_status=VisaStatus.visa_free,
         visa_note="פטור מויזה עד 90 יום",
         safety_level=SafetyLevel.very_safe,
         season_best_months=[3, 4, 10, 11],
@@ -51,7 +51,7 @@ def test_city_inherits_country_facts():
     # inherited from the country (Tokyo had these null)
     assert resolved["flight_from_tlv_minutes"].value == 780
     assert resolved["flight_from_tlv_minutes"].source == str(japan.id)
-    assert resolved["visa_israeli_required"].value is False
+    assert resolved["visa_status"].value is VisaStatus.visa_free
     assert resolved["safety_level"].value is SafetyLevel.very_safe
     assert resolved["season_best_months"].value == [3, 4, 10, 11]
 

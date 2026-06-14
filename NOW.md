@@ -91,14 +91,20 @@ uv (Python) / pnpm (web), nginx routing, daily `pg_dump`.
 
 ## Roadmap (next sessions)
 
-1. **Seed loader (MACRO)** — ⏳ IN PROGRESS. Sample run done (8 countries), full ~195
-   pending review. `backend/app/loaders/` (`countries_src` mledoze backbone · `names_he`
-   CLDR/babel · `cost_src` World Bank · `visa_src` Wikipedia · `geo` haversine).
-   `python -m app.loaders.seed_countries [CCA2...]`. Idempotent (upsert by iso2 / slug).
+1. **Seed loader (MACRO)** — ✅ DONE. Full run: 5 continents + 194 UN-member countries.
+   `backend/app/loaders/` (`countries_src` mledoze backbone · `names_he` CLDR/babel ·
+   `cost_src` World Bank · `visa_src` Wikipedia · `geo` haversine).
+   `python -m app.loaders.seed_countries [CCA2...]`. Idempotent (upsert by iso2 / slug;
+   field_source per place+field). Coverage: visa 193/194 (only Israel null — home country),
+   cost 188/194 (6 genuine WB gaps: Cuba, Liechtenstein, Monaco, North Korea, Turkmenistan,
+   Vatican). visa_status distribution: visa_free 98 · eta_evisa 52 · visa_required 33 · voa 9.
    - **cost_vs_israel**: the named WB indicator `PA.NUS.PPPC.RF` is ARCHIVED/unavailable;
      reconstructed as `PA.NUS.PPP / PA.NUS.FCRF` (its definition), rebased Israel=100.
-   - Geo uses country centroid (dataset has no `capitalInfo`) — flight time is approximate.
-   - Open classification Q: US "Visa Waiver Program" (ESTA) currently → visa_required=true.
+   - **visa_status** is an ordinal ease enum (`visa_free|eta_evisa|voa|visa_required`),
+     combos resolve to easiest; replaced the old `visa_israeli_required` bool (migration 0003).
+     ESTA/eVisa → `eta_evisa`. Names matched via `build_name_index` + a small alias map.
+   - Geo uses country centroid (dataset has no `capitalInfo`) — flight time is a coarse band;
+     precise flight comes at city enrichment and overrides via inheritance.
    - DEFERRED to next session: safety_level (WB Political Stability), language_barrier (EF EPI).
 2. **Map shell** — MapLibre GL JS: vector basemap + country-fill choropleth (zoomed out)
    → city/site markers (zoomed in). Zoom level drives the queried data level.
