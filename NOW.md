@@ -106,8 +106,21 @@ uv (Python) / pnpm (web), nginx routing, daily `pg_dump`.
    - Geo uses country centroid (dataset has no `capitalInfo`) — flight time is a coarse band;
      precise flight comes at city enrichment and overrides via inheritance.
    - DEFERRED to next session: safety_level (WB Political Stability), language_barrier (EF EPI).
-2. **Map shell** — MapLibre GL JS: vector basemap + country-fill choropleth (zoomed out)
-   → city/site markers (zoomed in). Zoom level drives the queried data level.
+2. **Map shell** — ✅ DONE (country level). MapLibre GL JS country-fill choropleth at `/`,
+   3-metric live toggle (ויזה / עלות / זמן טיסה) via feature-state, hover tooltip + click
+   side-panel stub, Israel-as-home, null-as-no-data. Endpoint `GET /api/map/countries`.
+   Polygons = Natural Earth 110m admin-0 (`web/public/ne_110m_admin0.geojson`), joined on
+   `ISO_A3_EH` ↔ `place.iso3`. Hebrew labels via locally-hosted Noto glyphs (`web/public/font/`).
+   - **Compiler: SWC (NOT Babel).** Babel's bundled Unicode tables in Next 14 can't compile
+     maplibre's `\p{Script=…}` regexes (and noParse doesn't skip loaders). `.babelrc` removed;
+     SWC compiles maplibre + Hebrew cleanly and also fixes the `next/font` landmine. **Deviation
+     from the house "Babel not SWC" convention — flagged, revisit if a Babel-only plugin is needed.**
+   - Coverage (165 matched): 9 NE polygons have no data (Antarctica, W. Sahara, Falklands,
+     Greenland, New Caledonia, Puerto Rico, Palestine, Taiwan, Fr. S. Lands) + 3 `-99` polygons
+     (Kosovo, N. Cyprus, Somaliland) → all render "no data". 29 data rows have NO 110m polygon
+     (small/island states: Singapore, Malta, Vatican, Monaco, Maldives, Pacific/Caribbean micro-
+     states…) — invisible at country fill; need NE 50m or point markers later.
+   - NEXT (zoom→city/site markers, vector basemap) deferred to the city-zoom session.
 3. **Place card** — the template, rendered with per-field provenance badges.
 4. **Compare view** — side-by-side within a level, over the comparison axes; sort/rank.
 5. **Extraction pipeline (MICRO)** — Claude API + web search → extract into template with
