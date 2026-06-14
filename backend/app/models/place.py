@@ -51,6 +51,9 @@ class Place(UUIDMixin, TimestampMixin, Base):
     name_he: Mapped[str] = mapped_column(String(200), nullable=False)
     name_en: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    # ISO 3166-1 alpha-2 for countries (cca2). Upsert key for the macro seed loader;
+    # NULL for non-country levels. Unique where present.
+    iso2: Mapped[Optional[str]] = mapped_column(String(2), unique=True)
     # On-demand micro-growth: new places land as 'stub' and get enriched on use.
     enrichment_status: Mapped[EnrichmentStatus] = mapped_column(
         SAEnum(EnrichmentStatus, name="enrichment_status"),
