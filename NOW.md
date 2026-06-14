@@ -91,8 +91,15 @@ uv (Python) / pnpm (web), nginx routing, daily `pg_dump`.
 
 ## Roadmap (next sessions)
 
-1. **Seed loader (MACRO)** — ingest ~195 countries with quantitative axes from named
-   sources (Numbeo cost-of-living, safety indices, visa-by-passport). No LLM.
+1. **Seed loader (MACRO)** — ⏳ IN PROGRESS. Sample run done (8 countries), full ~195
+   pending review. `backend/app/loaders/` (`countries_src` mledoze backbone · `names_he`
+   CLDR/babel · `cost_src` World Bank · `visa_src` Wikipedia · `geo` haversine).
+   `python -m app.loaders.seed_countries [CCA2...]`. Idempotent (upsert by iso2 / slug).
+   - **cost_vs_israel**: the named WB indicator `PA.NUS.PPPC.RF` is ARCHIVED/unavailable;
+     reconstructed as `PA.NUS.PPP / PA.NUS.FCRF` (its definition), rebased Israel=100.
+   - Geo uses country centroid (dataset has no `capitalInfo`) — flight time is approximate.
+   - Open classification Q: US "Visa Waiver Program" (ESTA) currently → visa_required=true.
+   - DEFERRED to next session: safety_level (WB Political Stability), language_barrier (EF EPI).
 2. **Map shell** — MapLibre GL JS: vector basemap + country-fill choropleth (zoomed out)
    → city/site markers (zoomed in). Zoom level drives the queried data level.
 3. **Place card** — the template, rendered with per-field provenance badges.
