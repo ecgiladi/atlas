@@ -63,3 +63,11 @@ class SavedStatus(str, enum.Enum):
     shortlist = "shortlist"
     want = "want"
     been = "been"
+
+
+class EnrichmentStatus(str, enum.Enum):
+    """Drives the on-demand micro-growth model + the 'enrich this stub' UI."""
+
+    stub = "stub"
+    partial = "partial"
+    enriched = "enriched"

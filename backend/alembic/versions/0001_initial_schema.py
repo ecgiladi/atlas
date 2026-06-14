@@ -37,10 +37,13 @@ time_of_day = postgresql.ENUM(
     "morning", "midday", "afternoon", "evening", "night", "any", name="time_of_day"
 )
 saved_status = postgresql.ENUM("shortlist", "want", "been", name="saved_status")
+enrichment_status = postgresql.ENUM(
+    "stub", "partial", "enriched", name="enrichment_status"
+)
 
 _ALL_ENUMS = [
     level, site_type, climate, flight_price_band, safety_level,
-    trail_difficulty, time_of_day, saved_status,
+    trail_difficulty, time_of_day, saved_status, enrichment_status,
 ]
 
 
@@ -83,6 +86,12 @@ def upgrade() -> None:
         sa.Column("name_he", sa.String(200), nullable=False),
         sa.Column("name_en", sa.String(200), nullable=False),
         sa.Column("slug", sa.String(200), nullable=False),
+        sa.Column(
+            "enrichment_status",
+            enrichment_status,
+            nullable=False,
+            server_default="stub",
+        ),
         # geo
         sa.Column("lat", sa.Float()),
         sa.Column("lng", sa.Float()),
@@ -137,7 +146,10 @@ def upgrade() -> None:
         sa.Column("note", sa.Text()),
         *ts_cols,
         sa.UniqueConstraint(
-            "place_id", "field_name", name="uq_field_source_place_field"
+            "place_id",
+            "field_name",
+            "source_url",
+            name="uq_field_source_place_field_url",
         ),
     )
     op.create_index("ix_field_source_place_id", "field_source", ["place_id"])

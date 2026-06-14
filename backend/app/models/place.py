@@ -15,11 +15,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
 from app.models.enums import (
     Climate,
+    EnrichmentStatus,
     FlightPriceBand,
     Level,
     SafetyLevel,
@@ -27,6 +28,7 @@ from app.models.enums import (
     TimeOfDay,
     TrailDifficulty,
 )
+from app.vocab import validate_good_for
 
 
 class Place(UUIDMixin, TimestampMixin, Base):
@@ -49,6 +51,13 @@ class Place(UUIDMixin, TimestampMixin, Base):
     name_he: Mapped[str] = mapped_column(String(200), nullable=False)
     name_en: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    # On-demand micro-growth: new places land as 'stub' and get enriched on use.
+    enrichment_status: Mapped[EnrichmentStatus] = mapped_column(
+        SAEnum(EnrichmentStatus, name="enrichment_status"),
+        nullable=False,
+        default=EnrichmentStatus.stub,
+        server_default=EnrichmentStatus.stub.value,
+    )
 
     # --- geo ---
     lat: Mapped[Optional[float]] = mapped_column(Float)
@@ -118,6 +127,11 @@ class Place(UUIDMixin, TimestampMixin, Base):
     __table_args__ = (
         Index("ix_place_level_parent", "level", "parent_id"),
     )
+
+    @validates("good_for")
+    def _validate_good_for(self, _key: str, value):
+        # Enforce the controlled vocabulary on every ORM write (incl. extraction).
+        return validate_good_for(value)
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return f"<Place {self.level.value} {self.name_en!r}>"

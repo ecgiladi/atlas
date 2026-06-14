@@ -53,11 +53,17 @@ Every qualitative/extracted field can carry a citation (`source_url` + `fetched_
 ## Data model (this session)
 
 - `place` — the spine. `level`, self-FK `parent_id`, identity (`name_he/name_en/slug`),
-  geo (`lat/lng` + `geojson_ref`), and the full comparison-axis column set.
+  geo (`lat/lng` + `geojson_ref`), `enrichment_status` (`stub|partial|enriched`, default
+  `stub` — drives on-demand micro-growth + the "enrich this stub" UI), and the full
+  comparison-axis column set.
+- `good_for` is `text[]` constrained to a CONTROLLED vocabulary
+  (`backend/app/vocab.py`, 12 tags), enforced app-side at the ORM layer (`@validates`)
+  so every write — including the MICRO extraction pipeline — is covered (no filter rot).
 - `site_or_route` fields live on `place` (gated by `level = site_or_route` + `site_type`):
   trail (`length_km/difficulty/duration_min`), attraction
   (`visit_minutes/ticket_price/best_time_of_day`).
-- `field_source` — per-field provenance (`place_id`, `field_name`, `source_url`, `fetched_at`).
+- `field_source` — per-field provenance, unique on
+  `(place_id, field_name, source_url)` so a narrative field can carry multiple sources.
 - `app_user` — minimal user anchor (single-user personal app for now).
 - `saved_place` — links user→place with `status` (`shortlist|want|been`) for the
   "compare my candidates" flow.
@@ -99,6 +105,8 @@ uv (Python) / pnpm (web), nginx routing, daily `pg_dump`.
 7. **Saved / compare-my-candidates** — shortlist/want/been flows over `saved_place`.
 
 ### Deferred / parked
+- **Travel-advisory / מל״ל warning field** — NOT added now (cheap to add later as a column
+  + the planned filter in roadmap #6).
 - Auth: single-user `app_user` anchor for now; wire real JWT auth when multi-user.
 - `geojson_ref` storage shape (R2 key vs inline) — decide at choropleth time.
 - Currency: monetary axes stored as ILS integers for now.

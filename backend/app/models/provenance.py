@@ -32,5 +32,11 @@ class FieldSource(UUIDMixin, TimestampMixin, Base):
     place: Mapped["Place"] = relationship("Place", back_populates="sources")
 
     __table_args__ = (
-        UniqueConstraint("place_id", "field_name", name="uq_field_source_place_field"),
+        # (place, field, url) so narrative fields can carry multiple sources.
+        UniqueConstraint(
+            "place_id",
+            "field_name",
+            "source_url",
+            name="uq_field_source_place_field_url",
+        ),
     )

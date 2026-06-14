@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.models.enums import (
     Climate,
+    EnrichmentStatus,
     FlightPriceBand,
     Level,
     SafetyLevel,
@@ -51,6 +52,7 @@ async def seed() -> None:
             slug="asia",
             name_he="אסיה",
             name_en="Asia",
+            enrichment_status=EnrichmentStatus.enriched,
         )
 
         japan = await _upsert(
@@ -75,6 +77,7 @@ async def seed() -> None:
             language_barrier=4,
             culture_section="כבוד, דיוק וטקסיות; נעליים בחוץ, שקט בתחבורה הציבורית.",
             history_context="איחוד תחת השוגונות, רסטורציית מייג'י, יפן המודרנית.",
+            enrichment_status=EnrichmentStatus.enriched,
         )
 
         tokyo = await _upsert(
@@ -90,9 +93,10 @@ async def seed() -> None:
             price_night=420,
             price_meal=55,
             cost_vs_israel=145,
-            good_for=["אוכל", "טכנולוגיה", "קניות", "תרבות"],
+            good_for=["food", "city", "shopping", "culture"],
             character_touristy_authentic=3,
             character_busy_quiet=1,
+            enrichment_status=EnrichmentStatus.partial,
         )
 
         senso = await _upsert(
@@ -108,7 +112,8 @@ async def seed() -> None:
             visit_minutes=90,
             ticket_price=0,
             best_time_of_day=TimeOfDay.morning,
-            good_for=["היסטוריה", "צילום"],
+            good_for=["culture"],
+            enrichment_status=EnrichmentStatus.enriched,
         )
 
         # provenance demo: cite where Tokyo's cost figure came from
