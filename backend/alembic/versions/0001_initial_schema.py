@@ -15,30 +15,38 @@ branch_labels = None
 depends_on = None
 
 
-# --- enum type definitions (created once, reused) ---
+# --- enum type definitions (created once explicitly; create_type=False so
+# create_table does NOT also auto-emit CREATE TYPE) ---
 level = postgresql.ENUM(
-    "continent", "country", "city", "site_or_route", name="level"
+    "continent", "country", "city", "site_or_route", name="level", create_type=False
 )
 site_type = postgresql.ENUM(
-    "attraction", "historical", "trail", "viewpoint", "other", name="site_type"
+    "attraction", "historical", "trail", "viewpoint", "other",
+    name="site_type", create_type=False,
 )
 climate = postgresql.ENUM(
     "tropical", "arid", "mediterranean", "temperate", "continental", "polar",
-    name="climate",
+    name="climate", create_type=False,
 )
-flight_price_band = postgresql.ENUM("low", "mid", "high", name="flight_price_band")
+flight_price_band = postgresql.ENUM(
+    "low", "mid", "high", name="flight_price_band", create_type=False
+)
 safety_level = postgresql.ENUM(
-    "very_safe", "safe", "moderate", "caution", "avoid", name="safety_level"
+    "very_safe", "safe", "moderate", "caution", "avoid",
+    name="safety_level", create_type=False,
 )
 trail_difficulty = postgresql.ENUM(
-    "easy", "moderate", "hard", "expert", name="trail_difficulty"
+    "easy", "moderate", "hard", "expert", name="trail_difficulty", create_type=False
 )
 time_of_day = postgresql.ENUM(
-    "morning", "midday", "afternoon", "evening", "night", "any", name="time_of_day"
+    "morning", "midday", "afternoon", "evening", "night", "any",
+    name="time_of_day", create_type=False,
 )
-saved_status = postgresql.ENUM("shortlist", "want", "been", name="saved_status")
+saved_status = postgresql.ENUM(
+    "shortlist", "want", "been", name="saved_status", create_type=False
+)
 enrichment_status = postgresql.ENUM(
-    "stub", "partial", "enriched", name="enrichment_status"
+    "stub", "partial", "enriched", name="enrichment_status", create_type=False
 )
 
 _ALL_ENUMS = [
