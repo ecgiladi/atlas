@@ -24,6 +24,7 @@ from app.models.enums import (
     SafetyLevel,
     SiteType,
     TimeOfDay,
+    VisaStatus,
 )
 from app.models.place import Place
 from app.models.provenance import FieldSource
@@ -71,7 +72,7 @@ async def seed() -> None:
             flight_from_tlv_minutes=780,
             flight_direct=False,
             flight_price_band=FlightPriceBand.high,
-            visa_israeli_required=False,
+            visa_status=VisaStatus.visa_free,
             visa_note="פטור מויזה לישראלים עד 90 יום",
             safety_level=SafetyLevel.very_safe,
             language_barrier=4,

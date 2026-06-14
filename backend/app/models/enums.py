@@ -71,3 +71,22 @@ class EnrichmentStatus(str, enum.Enum):
     stub = "stub"
     partial = "partial"
     enriched = "enriched"
+
+
+class VisaStatus(str, enum.Enum):
+    """Ordinal ease gradient for the Israeli passport. Declaration order = ease order
+    (easiest first); combos resolve to the easiest available option."""
+
+    visa_free = "visa_free"  # not required / freedom of movement
+    eta_evisa = "eta_evisa"  # ESTA / eVisa / eTA / electronic authorization (pre-trip)
+    voa = "voa"  # visa on arrival
+    visa_required = "visa_required"  # embassy visa in advance / admission refused
+
+
+# ease rank for "pick the easiest available" combo resolution
+VISA_STATUS_EASE: dict[VisaStatus, int] = {
+    VisaStatus.visa_free: 0,
+    VisaStatus.eta_evisa: 1,
+    VisaStatus.voa: 2,
+    VisaStatus.visa_required: 3,
+}

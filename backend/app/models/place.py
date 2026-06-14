@@ -27,6 +27,7 @@ from app.models.enums import (
     SiteType,
     TimeOfDay,
     TrailDifficulty,
+    VisaStatus,
 )
 from app.vocab import validate_good_for
 
@@ -81,7 +82,9 @@ class Place(UUIDMixin, TimestampMixin, Base):
     flight_price_band: Mapped[Optional[FlightPriceBand]] = mapped_column(
         SAEnum(FlightPriceBand, name="flight_price_band")
     )
-    visa_israeli_required: Mapped[Optional[bool]] = mapped_column(Boolean)
+    visa_status: Mapped[Optional[VisaStatus]] = mapped_column(
+        SAEnum(VisaStatus, name="visa_status")
+    )  # ordinal ease gradient for the Israeli passport
     visa_note: Mapped[Optional[str]] = mapped_column(Text)
     safety_level: Mapped[Optional[SafetyLevel]] = mapped_column(
         SAEnum(SafetyLevel, name="safety_level")

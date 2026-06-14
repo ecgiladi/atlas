@@ -22,7 +22,7 @@ INHERITABLE_FIELDS: tuple[str, ...] = (
     "flight_from_tlv_minutes",
     "flight_direct",
     "flight_price_band",
-    "visa_israeli_required",
+    "visa_status",
     "visa_note",
     "safety_level",
     "climate",
