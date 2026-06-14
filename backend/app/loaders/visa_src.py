@@ -1,36 +1,44 @@
-"""visa_israeli_required from Wikipedia "Visa requirements for Israeli citizens".
+"""visa_status from Wikipedia "Visa requirements for Israeli citizens".
 
-Pure `parse_visa(html)` -> {normalized_country_name: (required: bool, note: str)};
-`classify_visa_status(status)` maps the status text to the boolean.
+Pure `parse_visa(html)` -> {normalized_country_name: (VisaStatus, note: str)};
+`classify_visa_status(status)` maps the (color-coded) Wikipedia categories to the
+ordinal `VisaStatus`, picking the EASIEST available option for combo cells.
 """
 
+import re
+
 from app.loaders.http import get_text
+from app.models.enums import VISA_STATUS_EASE, VisaStatus
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 WIKI_PAGE = "Visa_requirements_for_Israeli_citizens"
 SOURCE_URL = "https://en.wikipedia.org/wiki/Visa_requirements_for_Israeli_citizens"
 
-# Status phrases that mean "no visa to arrange in advance".
-_NOT_REQUIRED = ("visa not required", "visa-free", "freedom of movement")
-_ON_ARRIVAL = ("on arrival",)
-# These require the traveler to arrange something (or entry is barred).
-_REQUIRED_ADVANCE = ("evisa", "e-visa", "eta", "e-ta", "electronic", "visa required")
+# Category detectors, checked independently so a combo cell yields multiple matches.
+_VISA_FREE = ("visa not required", "visa-free", "visa free", "freedom of movement")
+_VOA = ("on arrival",)
+_ETA_EVISA = ("evisa", "e-visa", "eta", "e-ta", "esta", "electronic", "visa waiver")
+_VISA_REQUIRED = ("visa required",)
 _REFUSED = ("admission refused", "banned", "no admission")
 
 
-def classify_visa_status(status: str) -> bool:
-    """True = a visa/authorization must be arranged (or entry refused); False = free entry."""
+def classify_visa_status(status: str) -> VisaStatus:
+    """Map a Wikipedia status cell to the easiest applicable VisaStatus."""
     s = status.lower()
-    if any(k in s for k in _NOT_REQUIRED):
-        return False
-    if any(k in s for k in _ON_ARRIVAL):
-        return False  # obtainable at the border, nothing to arrange beforehand
-    if any(k in s for k in _REFUSED):
-        return True
-    if any(k in s for k in _REQUIRED_ADVANCE):
-        return True
-    # Unknown phrasing — default to "required" (safer for trip planning).
-    return True
+    matched: list[VisaStatus] = []
+    if any(k in s for k in _VISA_FREE):
+        matched.append(VisaStatus.visa_free)
+    if any(k in s for k in _VOA):
+        matched.append(VisaStatus.voa)
+    # "eta" must be a whole word (avoid matching inside other words); others substring.
+    if re.search(r"\beta\b", s) or any(k in s for k in _ETA_EVISA if k != "eta"):
+        matched.append(VisaStatus.eta_evisa)
+    if any(k in s for k in _VISA_REQUIRED) or any(k in s for k in _REFUSED):
+        matched.append(VisaStatus.visa_required)
+
+    if not matched:
+        return VisaStatus.visa_required  # unknown phrasing -> safest (hardest)
+    return min(matched, key=lambda v: VISA_STATUS_EASE[v])
 
 
 def _clean_cell(cell) -> str:

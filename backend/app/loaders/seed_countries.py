@@ -18,9 +18,9 @@ from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.loaders import cost_src, countries_src, names_he, visa_src
-from app.loaders.countries_src import CountryRecord, normalize_name, slugify
+from app.loaders.countries_src import CountryRecord, slugify
 from app.loaders.geo import flight_from_tlv_minutes
-from app.models.enums import EnrichmentStatus, Level
+from app.models.enums import EnrichmentStatus, Level, VisaStatus
 from app.models.place import Place
 from app.models.provenance import FieldSource
 
@@ -44,7 +44,7 @@ class CountryPlan:
     lat: float
     lng: float
     cost_vs_israel: int | None
-    visa_required: bool | None
+    visa_status: "VisaStatus | None"
     visa_note: str | None
     flight_minutes: int
     provenance: list[Provenance] = field(default_factory=list)
@@ -59,7 +59,7 @@ class SeedPlan:
 def assemble(
     records: list[CountryRecord],
     cost_by_iso3: dict[str, tuple[int, int]],
-    visa_by_norm: dict[str, tuple[bool, str]],
+    visa_by_cca2: dict[str, tuple["VisaStatus", str]],
     sample_cca2: list[str] | None = None,
 ) -> SeedPlan:
     """Build the deterministic seed plan. Pure: no network, no DB."""
@@ -82,7 +82,7 @@ def assemble(
     for r in sorted(records, key=lambda x: x.cca2):
         name_he = names_he.hebrew_country_name(r.cca2)
         cost = cost_by_iso3.get(r.cca3)
-        visa = visa_by_norm.get(normalize_name(r.name_en))
+        visa = visa_by_cca2.get(r.cca2)
         flight = flight_from_tlv_minutes(r.lat, r.lng)
 
         prov: list[Provenance] = [
@@ -95,11 +95,11 @@ def assemble(
         if cost:
             cost_val, cost_year = cost
             prov.append(("cost_vs_israel", cost_src.SOURCE_URL, cost_src.cost_note(cost_year)))
-        visa_required = visa_note = None
+        visa_status = visa_note = None
         if visa:
-            visa_required, visa_note = visa
+            visa_status, visa_note = visa
             prov.append(
-                ("visa_israeli_required", visa_src.SOURCE_URL, f"Wikipedia: {visa_note}")
+                ("visa_status", visa_src.SOURCE_URL, f"Wikipedia: {visa_note}")
             )
 
         countries.append(
@@ -112,7 +112,7 @@ def assemble(
                 lat=r.lat,
                 lng=r.lng,
                 cost_vs_israel=cost_val,
-                visa_required=visa_required,
+                visa_status=visa_status,
                 visa_note=visa_note,
                 flight_minutes=flight,
                 provenance=prov,
@@ -196,7 +196,7 @@ async def apply(plan: SeedPlan) -> dict:
                     lat=c.lat,
                     lng=c.lng,
                     cost_vs_israel=c.cost_vs_israel,
-                    visa_israeli_required=c.visa_required,
+                    visa_status=c.visa_status,
                     visa_note=c.visa_note,
                     flight_from_tlv_minutes=c.flight_minutes,
                     enrichment_status=EnrichmentStatus.partial,
@@ -216,12 +216,22 @@ async def main(sample_cca2: list[str] | None) -> None:
     ppp = cost_src.fetch_series(cost_src.PPP_INDICATOR)
     fcrf = cost_src.fetch_series(cost_src.FCRF_INDICATOR)
     cost_by_iso3 = cost_src.compute_cost_vs_israel(ppp, fcrf)
+
+    # Resolve Wikipedia rows to cca2 via the name index (covers official names +
+    # altSpellings: "Turkey"->TR, "Czech Republic"->CZ, "Côte d'Ivoire"->CI, ...).
     visa_by_norm = visa_src.parse_visa(visa_src.fetch_visa_html())
+    name_index = countries_src.build_name_index(raw_countries)
+    visa_by_cca2: dict[str, tuple] = {}
+    for norm_name, val in visa_by_norm.items():
+        cca2 = name_index.get(norm_name)
+        if cca2:
+            visa_by_cca2.setdefault(cca2, val)
     print(
-        f"  countries={len(records)} cost={len(cost_by_iso3)} visa={len(visa_by_norm)}"
+        f"  countries={len(records)} cost={len(cost_by_iso3)} "
+        f"visa_rows={len(visa_by_norm)} visa_matched={len(visa_by_cca2)}"
     )
 
-    plan = assemble(records, cost_by_iso3, visa_by_norm, sample_cca2=sample_cca2)
+    plan = assemble(records, cost_by_iso3, visa_by_cca2, sample_cca2=sample_cca2)
     result = await apply(plan)
     print(f"Seeded: {result}")
 

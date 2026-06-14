@@ -70,6 +70,13 @@ def parse_countries(raw: list, un_members_only: bool = True) -> list[CountryReco
     return out
 
 
+# Manual aliases for source-naming divergences not covered by the dataset's altSpellings
+# (e.g. Wikipedia uses "Turkey"; mledoze lists only "Türkiye" / "Republic of Turkey").
+NAME_ALIASES: dict[str, str] = {
+    "turkey": "TR",
+}
+
+
 def build_name_index(raw: list) -> dict[str, str]:
     """normalized-name -> cca2, from common/official/altSpellings (for visa matching)."""
     idx: dict[str, str] = {}
@@ -80,4 +87,6 @@ def build_name_index(raw: list) -> dict[str, str]:
         for n in names:
             if n:
                 idx.setdefault(normalize_name(n), cca2)
+    for alias, cca2 in NAME_ALIASES.items():
+        idx.setdefault(normalize_name(alias), cca2)
     return idx
