@@ -37,6 +37,7 @@ class ContinentPlan:
 @dataclass
 class CountryPlan:
     cca2: str
+    cca3: str
     region: str
     slug: str
     name_en: str
@@ -105,6 +106,7 @@ def assemble(
         countries.append(
             CountryPlan(
                 cca2=r.cca2,
+                cca3=r.cca3,
                 region=r.region,
                 slug=r.slug,
                 name_en=r.name_en,
@@ -190,6 +192,7 @@ async def apply(plan: SeedPlan) -> dict:
                 dict(
                     level=Level.country,
                     parent_id=region_id.get(c.region),
+                    iso3=c.cca3,
                     name_he=c.name_he or c.name_en,
                     name_en=c.name_en,
                     slug=c.slug,
