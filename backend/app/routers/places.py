@@ -1,9 +1,12 @@
-"""Place detail endpoint — the templated place card feed.
+"""Place detail + compare endpoints — the templated place card feed.
 
 GET /api/places/{ref} returns one place resolved by iso3, slug, or UUID, with:
   - identity (name, level, iso3, enrichment_status, is_home)
   - every comparison axis, including explicit NULLs (the card decides empty states)
   - a per-field provenance map { field_name: {source_url, fetched_at, note, origin} }
+
+GET /api/places/compare?refs=JP,TH,GE returns an array of that same detail shape (2-3
+places) — the compare view computes per-axis winners client-side.
 
 Inheritance: inheritable axes resolve through the parent chain (city -> country ->
 continent) via app.inheritance. For countries today everything is own, so origin is
@@ -15,7 +18,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -92,14 +95,8 @@ async def _load_ancestors(session: AsyncSession, place: Place) -> list[Place]:
     return ancestors
 
 
-@router.get("/{ref}")
-async def get_place(
-    ref: str, session: AsyncSession = Depends(get_session)
-) -> dict:
-    place = await _resolve_place(session, ref)
-    if place is None:
-        raise HTTPException(status_code=404, detail=f"place not found: {ref!r}")
-
+async def _build_place_detail(session: AsyncSession, place: Place) -> dict:
+    """The full templated detail shape for one place (identity + axes + provenance)."""
     ancestors = await _load_ancestors(session, place)
     resolved = resolve_inherited(place, ancestors)
 
@@ -169,3 +166,35 @@ async def get_place(
         **axes,
         "provenance": provenance,
     }
+
+
+# NOTE: declared BEFORE "/{ref}" so the literal path wins over the catch-all param.
+@router.get("/compare")
+async def compare_places(
+    refs: str = Query(..., description="2-3 comma-separated iso3/slug refs"),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """Batch detail for the compare view: array of the /{ref} shape, in request order."""
+    wanted = [r.strip() for r in refs.split(",") if r.strip()]
+    if not (2 <= len(wanted) <= 3):
+        raise HTTPException(
+            status_code=400,
+            detail="compare needs 2-3 refs, got " + str(len(wanted)),
+        )
+    details: list[dict] = []
+    for ref in wanted:
+        place = await _resolve_place(session, ref)
+        if place is None:
+            raise HTTPException(status_code=404, detail=f"place not found: {ref!r}")
+        details.append(await _build_place_detail(session, place))
+    return details
+
+
+@router.get("/{ref}")
+async def get_place(
+    ref: str, session: AsyncSession = Depends(get_session)
+) -> dict:
+    place = await _resolve_place(session, ref)
+    if place is None:
+        raise HTTPException(status_code=404, detail=f"place not found: {ref!r}")
+    return await _build_place_detail(session, place)
