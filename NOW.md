@@ -2,8 +2,9 @@
 
 **Personal, Hebrew-RTL, map-first travel discovery & comparison tool for an Israeli traveler.**
 
-Last updated: 2026-06-15 · Status: map shell + place card shipped & merged to `master`
-(private remote `git@github.com:ecgiladi/atlas.git`). Next: compare view.
+Last updated: 2026-06-15 · Status: map shell + place card merged to `master`; compare view
+on `feat/compare` (pushed). Private remote `git@github.com:ecgiladi/atlas.git`.
+Next: saved_place/shortlist + MICRO enrichment.
 
 ---
 
@@ -145,8 +146,17 @@ Remote: PRIVATE `git@github.com:ecgiladi/atlas.git` (VPS ed25519 SSH key, accoun
    "פרטים נוספים יתווספו בהעשרה". Israel/home → baseline cost "100 · בסיס ההשוואה", no self-visa.
    Panel anchors `inset-inline-end` (left in RTL) to clear the right-side toggle + legend.
    **STOPPED before compare view** (next).
-4. **Compare view** — side-by-side within a level, over the comparison axes; sort/rank.
-   Reuses `PlaceCard` as the per-place template.
+4. **Compare view** — ✅ DONE (country level), on branch `feat/compare` (pushed, NOT merged).
+   `GET /api/places/compare?refs=…` (2-3 iso3/slug) → array of the `/{ref}` detail shape;
+   winners computed client-side. Compare TRAY (bottom bar, chips, "השווה (N)" enabled at >=2,
+   cap 3, React state — no localStorage): add via "הוסף להשוואה" in the card, and in
+   building-mode (tray non-empty) a map tap toggles a country in/out (zero-state tap still opens
+   the card). Compare VIEW (full-screen overlay): template axes as rows × places as columns, RTL
+   sticky axis-label column (right), 3-col horizontal-scroll on mobile, column-header tap opens
+   that place's card. Winner-per-row (`compare.ts`): cost/flight lower-better, visa by ordinal
+   ease; ties crown all; single-value/null = no crown ("—"); subjective axes never crown. Only
+   cost/visa/flight decide now; rest render subtly as "—". **STOPPED before saved_place/shortlist
+   + enrichment.**
 5. **Extraction pipeline (MICRO)** — Claude API + web search → extract into template with
    per-field citations; same pattern as GigaBait recipe module.
 6. **Filters** — by axis (season, cost band, flight band, safety, good_for tags, character,
