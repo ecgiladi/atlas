@@ -11,7 +11,7 @@
      deep night-navy radial reads as sky/space at world zoom — a little luminosity behind the
      globe for depth, not pure black. Once you drill into a region the flat ocean layer fills
      the viewport and covers it, so the flat map looks unchanged. */
-  background: radial-gradient(circle at 50% 44%, #1a2a47 0%, #0b1426 68%);
+  background: radial-gradient(circle at 50% 44%, #3a4a66 0%, #25324c 68%);
 }
 
 .tooltip {
