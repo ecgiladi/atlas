@@ -6,7 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import MetricToggle from "./MetricToggle";
 import Legend from "./Legend";
-import SidePanel from "./SidePanel";
+import PlaceCard from "./PlaceCard";
 import {
   BORDER_COLOR,
   HOME_LINE,
@@ -33,13 +33,11 @@ function ensureRtlTextPlugin() {
     return;
   }
   rtlPluginRequested = true;
-  maplibregl.setRTLTextPlugin(
-    "/mapbox-gl-rtl-text.js",
-    (err) => {
-      if (err) console.error("[MapView] RTL text plugin failed to load:", err);
-    },
-    false
-  );
+  // maplibre-gl v4 signature is (url, lazy). lazy:false → load eagerly so labels shape
+  // on first paint. Errors surface via the returned promise.
+  maplibregl
+    .setRTLTextPlugin("/mapbox-gl-rtl-text.js", false)
+    .catch((err) => console.error("[MapView] RTL text plugin failed to load:", err));
 }
 
 function metricValueLabel(metric: Metric, d: CountryDatum | undefined): string {
@@ -60,7 +58,8 @@ export default function MapView() {
   const hoveredRef = useRef<string | null>(null);
 
   const [metric, setMetric] = useState<Metric>("visa");
-  const [selected, setSelected] = useState<CountryDatum | null>(null);
+  // The selected place's iso3 — the card fetches its own full detail from this.
+  const [selectedRef, setSelectedRef] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,19 +226,8 @@ export default function MapView() {
       });
       map.on("click", "country-fill", (e) => {
         if (!e.features?.length) return;
-        const f = e.features[0];
-        const id = f.id as string;
-        const d = dataRef.current.get(id);
-        setSelected(
-          d ?? {
-            iso3: id,
-            name_he: (f.properties?.ADMIN as string) || id,
-            visa_status: null,
-            visa_note: null,
-            cost_vs_israel: null,
-            flight_from_tlv_minutes: null,
-          }
-        );
+        const id = e.features[0].id as string; // iso3 (== promoteId)
+        setSelectedRef(id);
       });
 
       clearTimeout(timeout);
@@ -289,7 +277,7 @@ export default function MapView() {
           <span className={styles.metric}>{tooltip.value}</span>
         </div>
       )}
-      <SidePanel country={selected} onClose={() => setSelected(null)} />
+      <PlaceCard placeRef={selectedRef} onClose={() => setSelectedRef(null)} />
     </div>
   );
 }

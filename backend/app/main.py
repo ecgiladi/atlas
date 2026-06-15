@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.routers.maps import router as maps_router
+from app.routers.places import router as places_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,6 +24,7 @@ app.add_middleware(
 
 
 app.include_router(maps_router)
+app.include_router(places_router)
 
 
 @app.get("/api/health")
