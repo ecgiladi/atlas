@@ -19,13 +19,18 @@ import {
 import type { CountryDatum } from "./types";
 import styles from "./MapView.module.css";
 
-const OCEAN = "#dfe6ec";
+const OCEAN = "#dfe6ec"; // flat-map ocean (region view) — unchanged
+// Globe sea: a soft, muted blue (calm, not saturated) so the sphere reads as Earth. The
+// background layer interpolates from this at world zoom to OCEAN by the region threshold,
+// so the flat region map keeps its existing light ocean exactly.
+const OCEAN_GLOBE = "#a7bccd";
 const ISO_PROP = "ISO_A3_EH";
 
 // Neutral land fill for the world/globe view: the country layer is present (click targets +
 // subtle definition) but carries NO metric color — the globe is the clean, personal frame,
-// not the heatmap. The metric choropleth only appears once you drill into a region.
-const LAND_NEUTRAL = "#cdd6cf";
+// not the heatmap. The metric choropleth only appears once you drill into a region. A hair
+// warm so it doesn't wash out against the richer ocean.
+const LAND_NEUTRAL = "#d3cdbe";
 
 // The map is ONE instance with two zoom bands ("modes"):
 //   world  (zoom < threshold): globe projection, neutral fills, pins, no toggle/legend.
@@ -124,8 +129,26 @@ export default function MapView() {
         glyphs: "/font/{fontstack}/{range}.pbf",
         sources: {},
         // The background layer is the globe's sea (and the flat map's ocean once zoomed
-        // in). Space around the sphere is the container's CSS background.
-        layers: [{ id: "ocean", type: "background", paint: { "background-color": OCEAN } }],
+        // in). Space around the sphere is the container's CSS background. Muted blue at
+        // world zoom -> the existing light ocean by the region threshold, so the flat
+        // region map is visually unchanged.
+        layers: [
+          {
+            id: "ocean",
+            type: "background",
+            paint: {
+              "background-color": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                2,
+                OCEAN_GLOBE,
+                REGION_ZOOM_THRESHOLD,
+                OCEAN,
+              ],
+            },
+          },
+        ],
       },
       center: WORLD_HOME.center,
       zoom: WORLD_HOME.zoom,
@@ -167,6 +190,29 @@ export default function MapView() {
       // Globe projection (MapLibre v5): adaptive composite — renders as a globe at low
       // zoom and morphs to flat Mercator as you zoom into a region. One map, two views.
       map.setProjection({ type: "globe" });
+
+      // Atmosphere (v5 sky spec): a soft blue glow at the limb over dark space, so the
+      // globe reads as a planet rather than a flat circle. Kept subtle. atmosphere-blend
+      // fades to 0 as we zoom into a region, so the flat map gets no sky/fog.
+      map.setSky({
+        "sky-color": "#0a1326", // space above the atmosphere
+        "sky-horizon-blend": 0.7,
+        "horizon-color": "#8fb8e0", // soft blue limb glow
+        "horizon-fog-blend": 0.5,
+        "fog-color": "#cfe0f0", // pale near-surface haze
+        "fog-ground-blend": 0.0,
+        "atmosphere-blend": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          0,
+          0.6,
+          4,
+          0.3,
+          6,
+          0,
+        ],
+      });
 
       const [geo, points, rows] = await Promise.all([
         fetchJson("/ne_110m_admin0.geojson"),

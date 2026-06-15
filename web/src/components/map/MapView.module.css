@@ -8,9 +8,10 @@
   position: absolute;
   inset: 0;
   /* Space behind the globe: the MapLibre canvas is transparent outside the sphere, so this
-     subtle deep-blue radial reads as sky/space at world zoom. Once you drill into a region
-     the flat ocean layer fills the viewport and covers it, so the map looks unchanged. */
-  background: radial-gradient(circle at 50% 42%, #1d2738 0%, #0d1320 72%);
+     deep night-navy radial reads as sky/space at world zoom — a little luminosity behind the
+     globe for depth, not pure black. Once you drill into a region the flat ocean layer fills
+     the viewport and covers it, so the flat map looks unchanged. */
+  background: radial-gradient(circle at 50% 44%, #1a2a47 0%, #0b1426 68%);
 }
 
 .tooltip {
