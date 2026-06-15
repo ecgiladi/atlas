@@ -11,12 +11,15 @@ class Level(str, enum.Enum):
 
 
 class SiteType(str, enum.Enum):
-    """Only meaningful when level == site_or_route. History is a site, not a level."""
+    """Site classification. Primarily for level == site_or_route (history is a site, not a
+    level), and also used at the destination tier (level == city) to mark a destination as
+    a 'natural' area (Amalfi Coast, Dolomites…) vs a city (site_type NULL)."""
 
     attraction = "attraction"
     historical = "historical"
     trail = "trail"
     viewpoint = "viewpoint"
+    natural = "natural"
     other = "other"
 
 

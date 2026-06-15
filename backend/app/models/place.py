@@ -64,6 +64,11 @@ class Place(UUIDMixin, TimestampMixin, Base):
         default=EnrichmentStatus.stub,
         server_default=EnrichmentStatus.stub.value,
     )
+    # Destination-tier grouping LABEL (e.g. "צפון איטליה") — a label for grouping in the
+    # drill funnel, NOT a hierarchy level. NULL for non-destination places.
+    region_label: Mapped[Optional[str]] = mapped_column(String(80))
+    # Classic-first ordering for the drill funnel: 1 = most classic. NULL = unranked (last).
+    classic_rank: Mapped[Optional[int]] = mapped_column(SmallInteger)
 
     # --- geo ---
     lat: Mapped[Optional[float]] = mapped_column(Float)

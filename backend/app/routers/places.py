@@ -1,13 +1,13 @@
-"""Place detail endpoint — the templated place card feed.
+"""Place detail + destination-tier endpoints — the templated place card feed.
 
-GET /api/places/{ref} returns one place resolved by iso3, slug, or UUID, with:
-  - identity (name, level, iso3, enrichment_status, is_home)
-  - every comparison axis, including explicit NULLs (the card decides empty states)
-  - a per-field provenance map { field_name: {source_url, fetched_at, note, origin} }
+GET /api/places/{ref}                      -> one place, every axis + per-field provenance.
+GET /api/places/{country_ref}/destinations -> a country's destination-tier children
+                                              (level=city), ordered classic-first, each in
+                                              the SAME template shape (the consolidated format).
 
 Inheritance: inheritable axes resolve through the parent chain (city -> country ->
-continent) via app.inheritance. For countries today everything is own, so origin is
-always 'own'; the resolver makes the city case correct later without a card change.
+continent) via app.inheritance, so a destination with a NULL cost shows the country's
+figure attributed to the country (origin 'inherited').
 """
 
 import uuid as uuidlib
@@ -15,12 +15,13 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.inheritance import INHERITABLE_FIELDS, resolve_inherited
+from app.models.enums import Level
 from app.models.place import Place
 from app.models.provenance import FieldSource
 
@@ -28,9 +29,7 @@ router = APIRouter(prefix="/api/places", tags=["places"])
 
 ISRAEL_ISO3 = "ISR"
 
-# Axes the card reads. Inheritable ones resolve through ancestors; the rest are
-# place-specific (free tags / character scales / site fields) and read straight off
-# the place. Listed explicitly so a NULL is an honest "no data", never a missing key.
+# Place-specific axes (free tags / character scales). Not inherited; read off the place.
 PLACE_SPECIFIC_AXES: tuple[str, ...] = (
     "good_for",
     "character_touristy_authentic",
@@ -92,30 +91,27 @@ async def _load_ancestors(session: AsyncSession, place: Place) -> list[Place]:
     return ancestors
 
 
-@router.get("/{ref}")
-async def get_place(
-    ref: str, session: AsyncSession = Depends(get_session)
-) -> dict:
-    place = await _resolve_place(session, ref)
-    if place is None:
-        raise HTTPException(status_code=404, detail=f"place not found: {ref!r}")
-
-    ancestors = await _load_ancestors(session, place)
-    resolved = resolve_inherited(place, ancestors)
-
-    # Pull every field_source row for the place + its ancestors in one shot, so an
-    # inherited field can cite the ancestor it actually came from.
-    place_ids = [place.id, *(a.id for a in ancestors)]
-    src_rows = (
+async def _load_sources(
+    session: AsyncSession, place_ids: list
+) -> dict[tuple, FieldSource]:
+    """All field_source rows for the given places, keyed by (place_id, field_name)."""
+    rows = (
         await session.execute(
             select(FieldSource).where(FieldSource.place_id.in_(place_ids))
         )
     ).scalars().all()
-    src_by_key: dict[tuple, FieldSource] = {
-        (s.place_id, s.field_name): s for s in src_rows
-    }
+    return {(s.place_id, s.field_name): s for s in rows}
 
-    def provenance_for(field_name: str, owner_id, origin: str) -> Optional[dict]:
+
+def _build_payload(
+    place: Place, ancestors: list[Place], src_by_key: dict[tuple, FieldSource]
+) -> dict:
+    """The uniform place template: identity + geo + every axis (explicit nulls) + a
+    per-field provenance map. Shared by the detail card and the destination list so every
+    place — country or destination — renders the same consolidated shape."""
+    resolved = resolve_inherited(place, ancestors)
+
+    def prov_for(field_name: str, owner_id, origin: str) -> Optional[dict]:
         row = src_by_key.get((owner_id, field_name))
         if row is None:
             return None
@@ -126,7 +122,6 @@ async def get_place(
             "origin": origin,
         }
 
-    # --- axes: inheritable resolve through ancestors; rest read off the place ---
     axes: dict = {}
     provenance: dict = {}
 
@@ -136,22 +131,23 @@ async def get_place(
         if rf.value is None:
             continue
         if rf.source == "own":
-            prov = provenance_for(field_name, place.id, "own")
+            prov = prov_for(field_name, place.id, "own")
         else:
-            # rf.source is the ancestor id (str) the value came from
-            owner_id = next(
-                (a.id for a in ancestors if str(a.id) == rf.source), None
-            )
-            prov = provenance_for(field_name, owner_id, "inherited") if owner_id else None
+            owner_id = next((a.id for a in ancestors if str(a.id) == rf.source), None)
+            prov = prov_for(field_name, owner_id, "inherited") if owner_id else None
         if prov:
             provenance[field_name] = prov
 
+    # Place-specific axes read off the place; attach own provenance when present (so a
+    # destination's character/good_for estimate can carry its "הערכה" badge).
     for field_name in PLACE_SPECIFIC_AXES:
         axes[field_name] = _jsonable(getattr(place, field_name, None))
+        prov = prov_for(field_name, place.id, "own")
+        if prov:
+            provenance[field_name] = prov
 
-    # Non-axis provenance (names, geo) — always own for the resolved place.
     for field_name in NON_AXIS_PROVENANCE:
-        prov = provenance_for(field_name, place.id, "own")
+        prov = prov_for(field_name, place.id, "own")
         if prov:
             provenance[field_name] = prov
 
@@ -159,13 +155,92 @@ async def get_place(
         # identity
         "id": str(place.id),
         "level": _jsonable(place.level),
+        "site_type": _jsonable(place.site_type),
         "name_he": place.name_he,
         "name_en": place.name_en,
         "slug": place.slug,
         "iso3": place.iso3,
+        # geo (pins) + destination grouping
+        "lat": place.lat,
+        "lng": place.lng,
+        "region_label": place.region_label,
+        "classic_rank": place.classic_rank,
         "enrichment_status": _jsonable(place.enrichment_status),
         "is_home": place.iso3 == ISRAEL_ISO3,
         # comparison axes (explicit nulls preserved)
         **axes,
         "provenance": provenance,
     }
+
+
+@router.get("/{country_ref}/destinations")
+async def get_destinations(
+    country_ref: str,
+    offset: int = Query(default=0, ge=0),
+    limit: Optional[int] = Query(default=None, ge=1),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Destination-tier children of a country, ordered classic-first (classic_rank asc,
+    unranked last). Returns the full ordered list + total by default; the frontend reveals
+    3 at a time. offset/limit are honoured if the caller prefers server-side paging."""
+    country = await _resolve_place(session, country_ref)
+    if country is None or country.level != Level.country:
+        raise HTTPException(status_code=404, detail=f"country not found: {country_ref!r}")
+
+    children = (
+        await session.execute(
+            select(Place)
+            .where(Place.parent_id == country.id, Place.level == Level.city)
+            .order_by(Place.classic_rank.asc().nulls_last(), Place.name_he)
+        )
+    ).scalars().all()
+
+    # A destination inherits through [country, continent, ...]; load once for all children.
+    country_ancestors = await _load_ancestors(session, country)
+    ancestors_for_child = [country, *country_ancestors]
+    src_ids = [c.id for c in children] + [country.id] + [a.id for a in country_ancestors]
+    src_by_key = await _load_sources(session, src_ids)
+
+    items = [_build_payload(c, ancestors_for_child, src_by_key) for c in children]
+    total = len(items)
+    if offset or limit is not None:
+        items = items[offset : (offset + limit) if limit is not None else None]
+
+    return {
+        "country": {
+            "ref": country.iso3 or country.slug,
+            "slug": country.slug,
+            "name_he": country.name_he,
+            "name_en": country.name_en,
+            "iso3": country.iso3,
+        },
+        "total": total,
+        "offset": offset,
+        "destinations": items,
+    }
+
+
+@router.get("/{ref}")
+async def get_place(
+    ref: str, session: AsyncSession = Depends(get_session)
+) -> dict:
+    place = await _resolve_place(session, ref)
+    if place is None:
+        raise HTTPException(status_code=404, detail=f"place not found: {ref!r}")
+
+    ancestors = await _load_ancestors(session, place)
+    place_ids = [place.id, *(a.id for a in ancestors)]
+    src_by_key = await _load_sources(session, place_ids)
+    payload = _build_payload(place, ancestors, src_by_key)
+
+    # Drill affordance: tell the country card whether it has destinations to reveal.
+    if place.level == Level.country:
+        payload["destination_count"] = (
+            await session.execute(
+                select(func.count())
+                .select_from(Place)
+                .where(Place.parent_id == place.id, Place.level == Level.city)
+            )
+        ).scalar_one()
+
+    return payload
