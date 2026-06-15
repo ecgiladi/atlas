@@ -168,21 +168,28 @@ export default function MapView() {
       // zoom and morphs to flat Mercator as you zoom into a region. One map, two views.
       map.setProjection({ type: "globe" });
 
-      const [geo, rows] = await Promise.all([
+      const [geo, points, rows] = await Promise.all([
         fetchJson("/ne_110m_admin0.geojson"),
+        // One representative Point per country (precomputed pole-of-inaccessibility of the
+        // largest polygon). Labels ride on THIS, not the fill source, so a MultiPolygon
+        // country (Canada/Russia/USA) gets one label, not one per island/exclave.
+        fetchJson("/country_label_points.geojson"),
         fetchJson("/api/map/countries") as Promise<CountryDatum[]>,
       ]);
       const byIso = new Map(rows.map((d) => [d.iso3, d]));
       dataRef.current = byIso;
 
-      // merge name_he into properties (labels only for countries we have data for) and
-      // cache each country's bbox for the world-mode drill-in fitBounds.
+      // cache each country's bbox (for the world-mode drill-in fitBounds).
       for (const f of geo.features) {
         const iso = f.properties[ISO_PROP];
-        const rec = byIso.get(iso);
-        f.properties.name_he = rec ? rec.name_he : "";
         const bb = bboxOf(f.geometry);
         if (bb && iso) bboxByIso.current.set(iso, bb);
+      }
+
+      // merge name_he onto the label points (only countries we have data for get a name).
+      for (const f of points.features) {
+        const rec = byIso.get(f.properties.iso_a3);
+        f.properties.name_he = rec ? rec.name_he : "";
       }
 
       map.addSource("countries", { type: "geojson", data: geo, promoteId: ISO_PROP });
@@ -216,16 +223,23 @@ export default function MapView() {
         filter: ["==", ["get", ISO_PROP], "ISR"],
         paint: { "line-color": HOME_LINE, "line-width": 1.8 },
       });
+      // One Point per country — the reusable country-keyed dataset. Labels live here so
+      // each country is named exactly once; country-level markers (microstates with no
+      // 110m polygon, future country pins) can ride on this same source by iso_a3.
+      map.addSource("country-points", { type: "geojson", data: points, promoteId: "iso_a3" });
       map.addLayer({
         id: "country-label",
         type: "symbol",
-        source: "countries",
+        source: "country-points",
         layout: {
           "text-field": ["get", "name_he"],
           "text-font": ["Noto Sans Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 1, 9, 4, 13],
+          // allow-overlap:false declutters the globe (only non-colliding labels render);
+          // sort-key keeps the home country (Israel) label as the first to win a slot.
           "text-allow-overlap": false,
           "text-padding": 4,
+          "symbol-sort-key": ["case", ["==", ["get", "iso_a3"], "ISR"], 0, 1],
         },
         paint: {
           "text-color": "#33383e",
@@ -239,6 +253,7 @@ export default function MapView() {
       // another branch. Seam to populate later: fetch GET /api/favorites, map each saved
       // place (status 'been' -> kind 'been'; otherwise 'favorite') to a Point feature at
       // its lat/lng, and source.setData(fc). The styling below already keys off `kind`.
+      // (Country-level markers can instead reuse the "country-points" source above.)
       map.addSource("pins", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
