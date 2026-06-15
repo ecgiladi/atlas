@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { Heart } from "lucide-react";
 
 import MetricToggle from "./MetricToggle";
 import Legend from "./Legend";
 import PlaceCard from "./PlaceCard";
+import FavoritesSheet from "./FavoritesSheet";
+import { listFavorites } from "./favorites";
 import {
   BORDER_COLOR,
   HOME_LINE,
@@ -20,6 +23,7 @@ import styles from "./MapView.module.css";
 
 const OCEAN = "#dfe6ec";
 const ISO_PROP = "ISO_A3_EH";
+const SAVED_LINE = "#c0445b"; // warm "saved" marker outline (matches the card heart)
 
 // MapLibre/WebGL does NOT apply bidi/RTL shaping to glyphs on its own, so Hebrew on-map
 // labels render reversed (גרמניה → "הינמרג"). The RTL text plugin fixes shaping. It's a
@@ -60,6 +64,11 @@ export default function MapView() {
   const [metric, setMetric] = useState<Metric>("visa");
   // The selected place's iso3 — the card fetches its own full detail from this.
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  // Favorites: a version counter so the card / sheet / map marker all re-sync after a
+  // mutation, and a flag for the favorites sheet.
+  const [favVersion, setFavVersion] = useState(0);
+  const [showFavorites, setShowFavorites] = useState(false);
+  const bumpFav = () => setFavVersion((v) => v + 1);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,6 +166,17 @@ export default function MapView() {
         source: "countries",
         filter: ["==", ["get", ISO_PROP], "ISR"],
         paint: { "line-color": HOME_LINE, "line-width": 1.8 },
+      });
+      // Subtle saved-country marker: a warm outline driven by feature-state `saved`.
+      // It's its own line layer, so it never touches the choropleth fill encoding.
+      map.addLayer({
+        id: "country-saved",
+        type: "line",
+        source: "countries",
+        paint: {
+          "line-color": SAVED_LINE,
+          "line-width": ["case", ["boolean", ["feature-state", "saved"], false], 2.5, 0],
+        },
       });
       map.addLayer({
         id: "country-label",
@@ -258,6 +278,33 @@ export default function MapView() {
     }
   }, [metric]);
 
+  // Reflect saved countries on the map: re-fetch favorites and set the `saved`
+  // feature-state for every country (so un-saving clears the outline too). Re-runs on
+  // favVersion bumps (a save/remove anywhere) and once the map is ready.
+  useEffect(() => {
+    if (!ready) return;
+    const map = mapRef.current;
+    if (!map || !map.getSource("countries")) return;
+    let cancelled = false;
+    listFavorites()
+      .then((favs) => {
+        if (cancelled) return;
+        const savedIso = new Set(
+          favs.map((f) => f.place.iso3).filter((x): x is string => !!x)
+        );
+        for (const iso of dataRef.current.keys()) {
+          map.setFeatureState(
+            { source: "countries", id: iso },
+            { saved: savedIso.has(iso) }
+          );
+        }
+      })
+      .catch((e) => console.error("[MapView] favorites marker sync failed:", e));
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, favVersion]);
+
   return (
     <div className={styles.wrap}>
       <div ref={containerRef} className={styles.map} />
@@ -277,7 +324,29 @@ export default function MapView() {
           <span className={styles.metric}>{tooltip.value}</span>
         </div>
       )}
-      <PlaceCard placeRef={selectedRef} onClose={() => setSelectedRef(null)} />
+      {!showFavorites && (
+        <button
+          type="button"
+          className={styles.favFab}
+          onClick={() => setShowFavorites(true)}
+          aria-label="היעדים שלי"
+        >
+          <Heart size={22} aria-hidden />
+        </button>
+      )}
+      <PlaceCard
+        placeRef={selectedRef}
+        favVersion={favVersion}
+        onFavChanged={bumpFav}
+        onClose={() => setSelectedRef(null)}
+      />
+      <FavoritesSheet
+        open={showFavorites}
+        favVersion={favVersion}
+        onSelectPlace={(ref) => setSelectedRef(ref)}
+        onChanged={bumpFav}
+        onClose={() => setShowFavorites(false)}
+      />
     </div>
   );
 }

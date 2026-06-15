@@ -67,3 +67,28 @@
   font-size: 14px;
   max-width: 32ch;
 }
+
+/* Favorites entry point — bottom-left, clear of the toggle (top-right), zoom control
+   (top-left) and legend (bottom-right). */
+.favFab {
+  position: absolute;
+  bottom: var(--atlas-space-4);
+  left: var(--atlas-space-4);
+  z-index: 25; /* above the place card (20) so the entry point stays reachable */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: var(--atlas-surface);
+  color: #c0445b;
+  box-shadow: var(--atlas-shadow);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.favFab:hover {
+  background: var(--atlas-surface-2);
+}

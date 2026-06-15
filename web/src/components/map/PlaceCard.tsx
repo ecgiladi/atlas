@@ -5,6 +5,7 @@ import { Home, X } from "lucide-react";
 
 import { VISA_COLORS, visaLabelHe } from "./encodings";
 import ProvenanceBadge from "./ProvenanceBadge";
+import SaveControl from "./SaveControl";
 import { flightBandHe, levelLabelHe, type PlaceDetail } from "./place";
 import styles from "./PlaceCard.module.css";
 
@@ -12,9 +13,13 @@ import styles from "./PlaceCard.module.css";
 // IS the template: same sections every place fills, so the compare view can reuse it.
 export default function PlaceCard({
   placeRef,
+  favVersion,
+  onFavChanged,
   onClose,
 }: {
   placeRef: string | null;
+  favVersion: number;
+  onFavChanged: () => void;
   onClose: () => void;
 }) {
   const [place, setPlace] = useState<PlaceDetail | null>(null);
@@ -63,12 +68,29 @@ export default function PlaceCard({
           טעינת הכרטיס נכשלה ({error})
         </p>
       )}
-      {place && <CardBody place={place} />}
+      {place && (
+        <CardBody
+          place={place}
+          placeRef={placeRef}
+          favVersion={favVersion}
+          onFavChanged={onFavChanged}
+        />
+      )}
     </aside>
   );
 }
 
-function CardBody({ place }: { place: PlaceDetail }) {
+function CardBody({
+  place,
+  placeRef,
+  favVersion,
+  onFavChanged,
+}: {
+  place: PlaceDetail;
+  placeRef: string;
+  favVersion: number;
+  onFavChanged: () => void;
+}) {
   const prov = place.provenance;
   const isHome = place.is_home;
 
@@ -103,6 +125,13 @@ function CardBody({ place }: { place: PlaceDetail }) {
           )}
         </div>
       </header>
+
+      {/* Save / judgment capture — "אתה שופט": records considering / want / been */}
+      <SaveControl
+        placeRef={placeRef}
+        favVersion={favVersion}
+        onChanged={onFavChanged}
+      />
 
       {/* 2. Essentials — each populated value carries its provenance badge */}
       <section className={styles.section}>
