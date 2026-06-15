@@ -41,6 +41,8 @@ export default function MapView() {
   const [metric, setMetric] = useState<Metric>("visa");
   const [selected, setSelected] = useState<CountryDatum | null>(null);
   const [ready, setReady] = useState(false);
+  const readyRef = useRef(false);
+  const [error, setError] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; name: string; value: string } | null>(
     null
   );
@@ -69,10 +71,33 @@ export default function MapView() {
       })
     );
 
+    // Surface a hung load instead of showing "טוען מפה…" forever. If the style/data/glyphs
+    // never finish (e.g. a 404 on chunks or a failed fetch), flip to an honest error state.
+    const timeout = setTimeout(() => {
+      if (!readyRef.current) {
+        const msg = "המפה לא נטענה בזמן (timeout). בדקו את חיבור הנתונים והרשת.";
+        console.error("[MapView] load timeout — map never became ready");
+        setError(msg);
+      }
+    }, 15000);
+
+    // Log every MapLibre internal error (missing tile/glyph range, style issue) — non-fatal
+    // ones won't block load, but they belong in the console, not swallowed.
+    map.on("error", (e) => {
+      console.error("[MapView] maplibre error:", (e && (e as any).error) || e);
+    });
+
+    async function fetchJson(url: string) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${url} → HTTP ${r.status}`);
+      return r.json();
+    }
+
     map.on("load", async () => {
+      try {
       const [geo, rows] = await Promise.all([
-        fetch("/ne_110m_admin0.geojson").then((r) => r.json()),
-        fetch("/api/map/countries").then((r) => r.json() as Promise<CountryDatum[]>),
+        fetchJson("/ne_110m_admin0.geojson"),
+        fetchJson("/api/map/countries") as Promise<CountryDatum[]>,
       ]);
       const byIso = new Map(rows.map((d) => [d.iso3, d]));
       dataRef.current = byIso;
@@ -195,10 +220,20 @@ export default function MapView() {
         );
       });
 
+      clearTimeout(timeout);
+      readyRef.current = true;
       setReady(true);
+      } catch (err) {
+        clearTimeout(timeout);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[MapView] failed to build map:", err);
+        setError(`טעינת המפה נכשלה: ${msg}`);
+      }
     });
 
     return () => {
+      clearTimeout(timeout);
+      readyRef.current = false;
       map.remove();
       mapRef.current = null;
     };
@@ -216,7 +251,14 @@ export default function MapView() {
   return (
     <div className={styles.wrap}>
       <div ref={containerRef} className={styles.map} />
-      {!ready && <div className={styles.loading}>טוען מפה…</div>}
+      {error ? (
+        <div className={styles.error} role="alert">
+          <b>שגיאה בטעינת המפה</b>
+          <span>{error}</span>
+        </div>
+      ) : (
+        !ready && <div className={styles.loading}>טוען מפה…</div>
+      )}
       <MetricToggle metric={metric} onChange={setMetric} />
       <Legend metric={metric} />
       {tooltip && (
