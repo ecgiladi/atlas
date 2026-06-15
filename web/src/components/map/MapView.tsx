@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import MetricToggle from "./MetricToggle";
 import Legend from "./Legend";
 import PlaceCard from "./PlaceCard";
+import CompareTray from "./CompareTray";
+import CompareView from "./CompareView";
+import { COMPARE_CAP, type CompareItem } from "./compare";
 import {
   BORDER_COLOR,
   HOME_LINE,
@@ -60,12 +63,44 @@ export default function MapView() {
   const [metric, setMetric] = useState<Metric>("visa");
   // The selected place's iso3 — the card fetches its own full detail from this.
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  // Compare tray (1-3 places). trayRef mirrors it for the map click closure.
+  const [tray, setTray] = useState<CompareItem[]>([]);
+  const trayRef = useRef<CompareItem[]>([]);
+  const [comparing, setComparing] = useState(false);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; name: string; value: string } | null>(
     null
   );
+
+  // Add/remove a place in the compare tray (cap COMPARE_CAP). trayRef kept in lockstep so
+  // the map click handler (built once, in the load closure) reads the live tray.
+  const toggleTray = useCallback((item: CompareItem) => {
+    setTray((prev) => {
+      const exists = prev.some((t) => t.ref === item.ref);
+      let next: CompareItem[];
+      if (exists) next = prev.filter((t) => t.ref !== item.ref);
+      else if (prev.length >= COMPARE_CAP) next = prev; // silently ignore over-cap
+      else next = [...prev, item];
+      trayRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const removeFromTray = useCallback((ref: string) => {
+    setTray((prev) => {
+      const next = prev.filter((t) => t.ref !== ref);
+      trayRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const clearTray = useCallback(() => {
+    trayRef.current = [];
+    setTray([]);
+    setComparing(false);
+  }, []);
 
   // init once
   useEffect(() => {
@@ -227,7 +262,15 @@ export default function MapView() {
       map.on("click", "country-fill", (e) => {
         if (!e.features?.length) return;
         const id = e.features[0].id as string; // iso3 (== promoteId)
-        setSelectedRef(id);
+        const d = dataRef.current.get(id);
+        // Building mode (tray has >=1): a tap toggles the country in/out of the tray.
+        // Zero-state: a tap opens the place card. Only data-backed countries are
+        // toggleable (a no-data polygon can't be fetched/compared).
+        if (trayRef.current.length >= 1) {
+          if (d) toggleTray({ ref: id, name_he: d.name_he });
+        } else {
+          setSelectedRef(id);
+        }
       });
 
       clearTimeout(timeout);
@@ -277,7 +320,29 @@ export default function MapView() {
           <span className={styles.metric}>{tooltip.value}</span>
         </div>
       )}
-      <PlaceCard placeRef={selectedRef} onClose={() => setSelectedRef(null)} />
+      <PlaceCard
+        placeRef={selectedRef}
+        onClose={() => setSelectedRef(null)}
+        inCompare={selectedRef != null && tray.some((t) => t.ref === selectedRef)}
+        compareFull={tray.length >= COMPARE_CAP}
+        onToggleCompare={toggleTray}
+      />
+      <CompareTray
+        items={tray}
+        onRemove={removeFromTray}
+        onClear={clearTray}
+        onCompare={() => setComparing(true)}
+      />
+      {comparing && (
+        <CompareView
+          items={tray}
+          onClose={() => setComparing(false)}
+          onOpenCard={(ref) => {
+            setComparing(false);
+            setSelectedRef(ref);
+          }}
+        />
+      )}
     </div>
   );
 }

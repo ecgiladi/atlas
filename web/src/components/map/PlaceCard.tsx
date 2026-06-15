@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Home, X } from "lucide-react";
+import { Check, Home, Plus, X } from "lucide-react";
 
 import { VISA_COLORS, visaLabelHe } from "./encodings";
+import { type CompareItem } from "./compare";
 import ProvenanceBadge from "./ProvenanceBadge";
 import { flightBandHe, levelLabelHe, type PlaceDetail } from "./place";
 import styles from "./PlaceCard.module.css";
@@ -13,9 +14,15 @@ import styles from "./PlaceCard.module.css";
 export default function PlaceCard({
   placeRef,
   onClose,
+  inCompare,
+  compareFull,
+  onToggleCompare,
 }: {
   placeRef: string | null;
   onClose: () => void;
+  inCompare: boolean;
+  compareFull: boolean;
+  onToggleCompare: (item: CompareItem) => void;
 }) {
   const [place, setPlace] = useState<PlaceDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,6 +71,19 @@ export default function PlaceCard({
         </p>
       )}
       {place && <CardBody place={place} />}
+
+      {place && place.iso3 && (
+        <button
+          type="button"
+          className={styles.compareAction}
+          disabled={compareFull && !inCompare}
+          onClick={() => onToggleCompare({ ref: place.iso3!, name_he: place.name_he })}
+          data-testid="compare-add"
+        >
+          {inCompare ? <Check size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
+          {inCompare ? "הסר מהשוואה" : "הוסף להשוואה"}
+        </button>
+      )}
     </aside>
   );
 }

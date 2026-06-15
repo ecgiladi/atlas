@@ -15,6 +15,30 @@
   overflow-y: auto;
 }
 
+.compareAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--atlas-space-2);
+  margin-top: var(--atlas-space-2);
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border: 1px solid var(--atlas-accent);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.compareAction:disabled {
+  background: var(--atlas-surface);
+  color: var(--atlas-text-muted);
+  border-color: var(--atlas-line);
+  cursor: not-allowed;
+}
+
 .close {
   position: absolute;
   top: var(--atlas-space-3);
