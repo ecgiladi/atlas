@@ -7,6 +7,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import MetricToggle from "./MetricToggle";
 import Legend from "./Legend";
 import PlaceCard from "./PlaceCard";
+import DestinationPanel from "./DestinationPanel";
 import {
   BORDER_COLOR,
   HOME_LINE,
@@ -15,11 +16,31 @@ import {
   visaLabelHe,
   type Metric,
 } from "./encodings";
+import {
+  fetchDestinations,
+  REVEAL_STEP,
+  type Destination,
+  type DestinationsResponse,
+} from "./destinations";
 import type { CountryDatum } from "./types";
 import styles from "./MapView.module.css";
 
 const OCEAN = "#dfe6ec";
 const ISO_PROP = "ISO_A3_EH";
+const DEST_ACCENT = "#b5651d"; // destination pin (warm, distinct from the choropleth fills)
+
+// Reuse the one-point-per-feature pattern (from the label-points work): destinations are
+// points of the same shape, so they ride a geojson Point source + circle/label layers.
+function destFeatureCollection(dests: Destination[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: dests.map((d) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [d.lng, d.lat] },
+      properties: { slug: d.slug, name_he: d.name_he, site_type: d.site_type ?? "" },
+    })),
+  };
+}
 
 // MapLibre/WebGL does NOT apply bidi/RTL shaping to glyphs on its own, so Hebrew on-map
 // labels render reversed (גרמניה → "הינמרג"). The RTL text plugin fixes shaping. It's a
@@ -58,8 +79,14 @@ export default function MapView() {
   const hoveredRef = useRef<string | null>(null);
 
   const [metric, setMetric] = useState<Metric>("visa");
-  // The selected place's iso3 — the card fetches its own full detail from this.
+  // The selected place's iso3/slug — the card fetches its own full detail from this.
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  // Drill funnel: which country we're exploring, its destinations, and how many are revealed.
+  const [drillRef, setDrillRef] = useState<string | null>(null);
+  const [destData, setDestData] = useState<DestinationsResponse | null>(null);
+  const [revealed, setRevealed] = useState(REVEAL_STEP);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +203,53 @@ export default function MapView() {
         },
       });
 
+      // Destination pins (drill-down). Empty until a country is drilled; the reveal effect
+      // sets the data so pins grow with the card list. Same point-source pattern as labels.
+      map.addSource("destinations", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+        promoteId: "slug",
+      });
+      map.addLayer({
+        id: "destination-pins",
+        type: "circle",
+        source: "destinations",
+        paint: {
+          "circle-radius": 7,
+          "circle-color": DEST_ACCENT,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+      map.addLayer({
+        id: "destination-pin-labels",
+        type: "symbol",
+        source: "destinations",
+        layout: {
+          "text-field": ["get", "name_he"],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": 12,
+          "text-offset": [0, 1.2],
+          "text-anchor": "top",
+          "text-allow-overlap": false,
+        },
+        paint: {
+          "text-color": "#2b3036",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.4,
+        },
+      });
+      map.on("click", "destination-pins", (e) => {
+        if (!e.features?.length) return;
+        setSelectedRef(e.features[0].properties?.slug as string);
+      });
+      map.on("mouseenter", "destination-pins", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "destination-pins", () => {
+        map.getCanvas().style.cursor = "";
+      });
+
       // apply metrics via feature-state
       for (const d of rows) {
         map.setFeatureState(
@@ -258,6 +332,56 @@ export default function MapView() {
     }
   }, [metric]);
 
+  // Reveal effect: keep the pins in sync with the revealed (classic-first) destinations, so
+  // pins and the card list grow together on each "עוד".
+  useEffect(() => {
+    const map = mapRef.current;
+    const src = map?.getSource("destinations") as maplibregl.GeoJSONSource | undefined;
+    if (!src) return;
+    const visible = (destData?.destinations ?? []).slice(0, revealed);
+    src.setData(destFeatureCollection(visible));
+  }, [destData, revealed, ready]);
+
+  // Enter the drill funnel for a country: load its destinations, frame them on the map,
+  // and open the panel. Clears the country card so the panel takes over.
+  async function handleDrill(ref: string) {
+    setSelectedRef(null);
+    setDrillRef(ref);
+    setRevealed(REVEAL_STEP);
+    setDrillLoading(true);
+    setDrillError(null);
+    try {
+      const data = await fetchDestinations(ref);
+      setDestData(data);
+      const map = mapRef.current;
+      if (map && data.destinations.length) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const d of data.destinations) {
+          minX = Math.min(minX, d.lng);
+          maxX = Math.max(maxX, d.lng);
+          minY = Math.min(minY, d.lat);
+          maxY = Math.max(maxY, d.lat);
+        }
+        // Pad the panel side (RTL: the panel sits on the physical left) so pins stay clear.
+        map.fitBounds(
+          [[minX, minY], [maxX, maxY]],
+          { padding: { top: 70, bottom: 70, left: 380, right: 70 }, duration: 1600, maxZoom: 7 }
+        );
+      }
+    } catch (e) {
+      setDrillError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDrillLoading(false);
+    }
+  }
+
+  function closeDrill() {
+    setDrillRef(null);
+    setDestData(null);
+    const src = mapRef.current?.getSource("destinations") as maplibregl.GeoJSONSource | undefined;
+    src?.setData({ type: "FeatureCollection", features: [] });
+  }
+
   return (
     <div className={styles.wrap}>
       <div ref={containerRef} className={styles.map} />
@@ -277,7 +401,24 @@ export default function MapView() {
           <span className={styles.metric}>{tooltip.value}</span>
         </div>
       )}
-      <PlaceCard placeRef={selectedRef} onClose={() => setSelectedRef(null)} />
+      {drillRef && (
+        <DestinationPanel
+          countryNameHe={destData?.country.name_he ?? ""}
+          destinations={destData?.destinations ?? []}
+          revealed={revealed}
+          total={destData?.total ?? 0}
+          loading={drillLoading}
+          error={drillError}
+          onReveal={() => setRevealed((r) => Math.min(r + REVEAL_STEP, destData?.total ?? r))}
+          onOpen={(ref) => setSelectedRef(ref)}
+          onClose={closeDrill}
+        />
+      )}
+      <PlaceCard
+        placeRef={selectedRef}
+        onDrill={handleDrill}
+        onClose={() => setSelectedRef(null)}
+      />
     </div>
   );
 }

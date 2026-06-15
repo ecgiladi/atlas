@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Home, X } from "lucide-react";
+import { Compass, Home, X } from "lucide-react";
 
 import { VISA_COLORS, visaLabelHe } from "./encodings";
 import ProvenanceBadge from "./ProvenanceBadge";
@@ -12,9 +12,13 @@ import styles from "./PlaceCard.module.css";
 // IS the template: same sections every place fills, so the compare view can reuse it.
 export default function PlaceCard({
   placeRef,
+  onDrill,
   onClose,
 }: {
   placeRef: string | null;
+  // Drill into a country's destinations (shown only when the country has any). Optional so
+  // the card stays reusable everywhere (e.g. the tapped-through destination card).
+  onDrill?: (ref: string) => void;
   onClose: () => void;
 }) {
   const [place, setPlace] = useState<PlaceDetail | null>(null);
@@ -63,12 +67,18 @@ export default function PlaceCard({
           טעינת הכרטיס נכשלה ({error})
         </p>
       )}
-      {place && <CardBody place={place} />}
+      {place && <CardBody place={place} onDrill={onDrill} />}
     </aside>
   );
 }
 
-function CardBody({ place }: { place: PlaceDetail }) {
+function CardBody({
+  place,
+  onDrill,
+}: {
+  place: PlaceDetail;
+  onDrill?: (ref: string) => void;
+}) {
   const prov = place.provenance;
   const isHome = place.is_home;
 
@@ -103,6 +113,19 @@ function CardBody({ place }: { place: PlaceDetail }) {
           )}
         </div>
       </header>
+
+      {/* Drill affordance — funnel into this country's destinations (consolidation: from
+          the macro country down to the classic destinations within it). */}
+      {onDrill && place.level === "country" && (place.destination_count ?? 0) > 0 && (
+        <button
+          type="button"
+          className={styles.drill}
+          onClick={() => onDrill(place.iso3 || place.slug)}
+        >
+          <Compass size={16} aria-hidden />
+          גלה יעדים ב{place.name_he}
+        </button>
+      )}
 
       {/* 2. Essentials — each populated value carries its provenance badge */}
       <section className={styles.section}>

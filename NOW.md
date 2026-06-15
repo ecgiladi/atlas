@@ -190,6 +190,13 @@ Remote: PRIVATE `git@github.com:ecgiladi/atlas.git` (VPS ed25519 SSH key, accoun
 7. **Saved / compare-my-candidates** — shortlist/want/been flows over `saved_place`.
 
 ### Deferred / parked
+- **Italy drill-down slice (`feat/italy-drill`)** — first destination drill: 12 seeded Italy
+  destinations (level=city; `site_type='natural'` marks natural areas), `region_label` +
+  `classic_rank` (migration 0005), `GET /api/places/{country}/destinations`, country-card
+  drill affordance → Italy map with classic-first pins + uniform destination cards (3 at a
+  time via "עוד") → tap → PlaceCard. **Deferred for THIS slice (don't build yet):**
+  favoriting/heart on destinations · the site/route LEAF level inside a destination · the
+  on-demand gather-engine (this slice is SEEDED — destinations hand-entered, not gathered).
 - **Travel-advisory / מל״ל warning field** — NOT added now (cheap to add later as a column
   + the planned filter in roadmap #6).
 - Auth: single-user `app_user` anchor for now; wire real JWT auth when multi-user.

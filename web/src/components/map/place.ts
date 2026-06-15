@@ -13,12 +13,19 @@ export interface Provenance {
 export interface PlaceDetail {
   id: string;
   level: string;
+  site_type: string | null;
   name_he: string;
   name_en: string;
   slug: string;
   iso3: string | null;
+  lat: number | null;
+  lng: number | null;
+  region_label: string | null;
+  classic_rank: number | null;
   enrichment_status: "stub" | "partial" | "enriched";
   is_home: boolean;
+  // present only on country payloads — how many destinations the drill can reveal
+  destination_count?: number;
 
   cost_vs_israel: number | null;
   price_night: number | null;
@@ -41,7 +48,7 @@ export interface PlaceDetail {
   provenance: Record<string, Provenance>;
 }
 
-export type ProvenanceKind = "external" | "computed" | "inherited";
+export type ProvenanceKind = "external" | "computed" | "inherited" | "estimate";
 
 export interface SourceInfo {
   kind: ProvenanceKind;
@@ -93,6 +100,13 @@ export function describeProvenance(p: Provenance): SourceInfo {
 
   if (p.origin === "inherited") {
     return { kind: "inherited", title: "יורש ממדינה", dateText, url: p.source_url, method: null };
+  }
+
+  // Soft/estimated values are tagged "הערכה" in the note (no documented source) — surface
+  // that honestly rather than passing them off as computed/documented fact.
+  if (!p.source_url && p.note?.includes("הערכה")) {
+    const method = p.note.replace(/^הערכה\s*[—–-]\s*/, "").trim();
+    return { kind: "estimate", title: "הערכה", dateText, url: null, method: method || null };
   }
 
   // No URL -> computed / method-only field.

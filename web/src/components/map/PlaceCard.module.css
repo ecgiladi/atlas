@@ -3,7 +3,9 @@
   top: 0;
   inset-inline-end: 0;
   bottom: 0;
-  z-index: 20;
+  /* Above the destination drill panel (22): a tapped destination's full card stacks over
+     the funnel list; closing it returns to the panel underneath. */
+  z-index: 24;
   width: 340px;
   max-width: 88vw;
   background: var(--atlas-surface);
@@ -92,6 +94,27 @@
 .chipMuted {
   background: transparent;
   border: 1px dashed var(--atlas-line);
+}
+
+/* Drill affordance — funnel into a country's destinations */
+.drill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--atlas-space-2);
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border: none;
+  border-radius: var(--atlas-radius);
+  background: var(--atlas-accent);
+  color: #fff;
+  font-family: var(--atlas-font);
+  font-size: 15px;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.drill:hover {
+  opacity: 0.92;
 }
 
 /* --- sections / fields --- */

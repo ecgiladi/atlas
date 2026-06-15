@@ -1,0 +1,80 @@
+.panel {
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  bottom: 0;
+  z-index: 22; /* above the place card (20) so the drill list frames the destinations */
+  width: 360px;
+  max-width: 90vw;
+  background: var(--atlas-surface);
+  box-shadow: var(--atlas-shadow);
+  padding: var(--atlas-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-3);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--atlas-text-muted);
+  padding: var(--atlas-space-1);
+  border-radius: var(--atlas-radius-sm);
+  display: inline-flex;
+}
+
+.close:hover {
+  background: var(--atlas-surface-2);
+}
+
+.status {
+  margin: var(--atlas-space-3) 0 0;
+  font-size: 14px;
+  color: var(--atlas-text-muted);
+}
+
+.count {
+  margin: 0;
+  font-size: 12px;
+  color: var(--atlas-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--atlas-space-1);
+  padding: var(--atlas-space-3);
+  border: 1px dashed var(--atlas-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  font-family: var(--atlas-font);
+  font-size: 14px;
+  color: var(--atlas-accent);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.more:hover {
+  background: var(--atlas-surface-2);
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Calculator, CornerDownLeft, ExternalLink, Info } from "lucide-react";
+import { Calculator, CircleDashed, CornerDownLeft, ExternalLink, Info } from "lucide-react";
 
 import { describeProvenance, type Provenance } from "./place";
 import styles from "./ProvenanceBadge.module.css";
@@ -10,6 +10,7 @@ const ICONS = {
   external: Info,
   computed: Calculator,
   inherited: CornerDownLeft,
+  estimate: CircleDashed,
 } as const;
 
 // The headline affordance: a small, unobtrusive "where did this come from" marker that
