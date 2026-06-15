@@ -53,8 +53,11 @@ def _jsonable(value):
 async def get_default_user(session: AsyncSession) -> AppUser:
     """Resolve (creating once) the single default user.
 
-    Idempotent: the unique email means a concurrent create collides on the constraint;
-    we re-read in that case instead of failing the request.
+    Commits on create so the row is durable no matter which request type first hits it
+    — a read-only endpoint (GET) that creates-then-doesn't-commit would roll the user
+    back, and a later write could associate a *different* user, so the save would never
+    show up in the list. Committing here guarantees one stable user across PUT and GET.
+    Idempotent: a concurrent create collides on the unique email; we re-read in that case.
     """
     user = (
         await session.execute(
@@ -67,7 +70,8 @@ async def get_default_user(session: AsyncSession) -> AppUser:
     user = AppUser(email=DEFAULT_USER_EMAIL, display_name=DEFAULT_USER_NAME)
     session.add(user)
     try:
-        await session.flush()
+        await session.commit()
+        await session.refresh(user)
     except Exception:  # unique-violation race — someone else inserted it first
         await session.rollback()
         user = (
