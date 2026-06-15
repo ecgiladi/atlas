@@ -2,12 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---- Atlas design tokens ---- */
 :root {
   color-scheme: light;
+
+  --atlas-ocean: #dfe6ec;
+  --atlas-border: #9aa5ae;
+
+  --atlas-text: #2b3036;
+  --atlas-text-muted: #6b747d;
+  --atlas-surface: #ffffff;
+  --atlas-surface-2: #f4f6f8;
+  --atlas-line: #e2e6ea;
+  --atlas-accent: #3d5a80;
+
+  --atlas-radius: 10px;
+  --atlas-radius-sm: 7px;
+  --atlas-shadow: 0 2px 10px rgba(20, 28, 38, 0.12);
+
+  --atlas-space-1: 4px;
+  --atlas-space-2: 8px;
+  --atlas-space-3: 12px;
+  --atlas-space-4: 16px;
+  --atlas-space-5: 24px;
+
+  --atlas-font: "Heebo", system-ui, sans-serif;
 }
 
 html,
 body {
   padding: 0;
   margin: 0;
+  height: 100%;
+  font-family: var(--atlas-font);
+  color: var(--atlas-text);
+}
+
+#__next,
+body > div:first-child {
+  height: 100%;
 }

@@ -1,0 +1,54 @@
+.legend {
+  position: absolute;
+  bottom: var(--atlas-space-4);
+  right: var(--atlas-space-4);
+  z-index: 10;
+  min-width: 180px;
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  background: var(--atlas-surface);
+  border-radius: var(--atlas-radius);
+  box-shadow: var(--atlas-shadow);
+  font-size: 13px;
+  color: var(--atlas-text);
+}
+
+.title {
+  margin: 0 0 var(--atlas-space-2);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--atlas-text-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  margin-bottom: var(--atlas-space-1);
+}
+
+.swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.ramp {
+  height: 12px;
+  border-radius: 4px;
+  margin-bottom: var(--atlas-space-1);
+}
+
+.rampLabels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--atlas-text-muted);
+  font-size: 12px;
+}
+
+.divider {
+  height: 1px;
+  background: var(--atlas-line);
+  margin: var(--atlas-space-2) 0;
+}

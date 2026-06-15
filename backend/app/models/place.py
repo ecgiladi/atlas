@@ -55,6 +55,8 @@ class Place(UUIDMixin, TimestampMixin, Base):
     # ISO 3166-1 alpha-2 for countries (cca2). Upsert key for the macro seed loader;
     # NULL for non-country levels. Unique where present.
     iso2: Mapped[Optional[str]] = mapped_column(String(2), unique=True)
+    # ISO 3166-1 alpha-3 (cca3) — join key for Natural Earth polygons (ISO_A3_EH).
+    iso3: Mapped[Optional[str]] = mapped_column(String(3), unique=True)
     # On-demand micro-growth: new places land as 'stub' and get enriched on use.
     enrichment_status: Mapped[EnrichmentStatus] = mapped_column(
         SAEnum(EnrichmentStatus, name="enrichment_status"),
