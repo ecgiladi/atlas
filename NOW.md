@@ -111,15 +111,27 @@ uv (Python) / pnpm (web), nginx routing, daily `pg_dump`.
    side-panel stub, Israel-as-home, null-as-no-data. Endpoint `GET /api/map/countries`.
    Polygons = Natural Earth 110m admin-0 (`web/public/ne_110m_admin0.geojson`), joined on
    `ISO_A3_EH` ↔ `place.iso3`. Hebrew labels via locally-hosted Noto glyphs (`web/public/font/`).
-   - **Compiler: SWC (NOT Babel).** Babel's bundled Unicode tables in Next 14 can't compile
-     maplibre's `\p{Script=…}` regexes (and noParse doesn't skip loaders). `.babelrc` removed;
-     SWC compiles maplibre + Hebrew cleanly and also fixes the `next/font` landmine. **Deviation
-     from the house "Babel not SWC" convention — flagged, revisit if a Babel-only plugin is needed.**
+   - **Compiler: SWC (NOT Babel) — documented, accepted deviation.** Babel's bundled Unicode
+     tables in Next 14 can't compile maplibre's `\p{Script=…}` regexes (and noParse doesn't skip
+     loaders). `.babelrc` removed; SWC compiles maplibre + Hebrew cleanly and also fixes the
+     `next/font` landmine. The house "Babel not SWC" rule was a workaround for a *VPS AVX
+     limitation*, not a preference — it does not apply here. **Verified on the VPS (2026-06-15):
+     full production `next build` completes ("✓ Compiled successfully", 4/4 static pages, no
+     illegal-instruction / native-module crash); SWC used the NATIVE binary
+     (`next-swc.linux-x64-gnu.node`, 131 MB, loads clean), NOT the WASM fallback (no wasm
+     warning). This VPS CPU reports `avx avx2 avx512f …` — so the AVX assumption behind the house
+     Babel rule is stale on this machine; worth re-checking for the OTHER projects (separate task,
+     not this session).**
    - Coverage (165 matched): 9 NE polygons have no data (Antarctica, W. Sahara, Falklands,
      Greenland, New Caledonia, Puerto Rico, Palestine, Taiwan, Fr. S. Lands) + 3 `-99` polygons
      (Kosovo, N. Cyprus, Somaliland) → all render "no data". 29 data rows have NO 110m polygon
      (small/island states: Singapore, Malta, Vatican, Monaco, Maldives, Pacific/Caribbean micro-
      states…) — invisible at country fill; need NE 50m or point markers later.
+   - **QUEUED (next map task, user-approved 2026-06-15, NOT started):** add clickable POINT
+     MARKERS at centroids for the 29 UN members with no 110m polygon (real destinations:
+     Singapore, Malta, Bahrain, Maldives, Mauritius, Seychelles, …), colored by the active metric
+     via feature-state so every country is selectable regardless of polygon. **Prefer markers
+     over switching to NE 50m** — forward-compatible with the coming city pins.
    - NEXT (zoom→city/site markers, vector basemap) deferred to the city-zoom session.
 3. **Place card** — the template, rendered with per-field provenance badges.
 4. **Compare view** — side-by-side within a level, over the comparison axes; sort/rank.
