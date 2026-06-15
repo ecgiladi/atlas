@@ -8,6 +8,41 @@ Next: saved_place/shortlist + MICRO enrichment.
 
 ---
 
+## Product North-Star
+
+*Build TOWARD this — not just the next feature.*
+
+- **THESIS:** Atlas is a **consolidation layer** for trip research, in an Israeli lens — it
+  gathers and structures what's scattered across ten search engines into one sourced,
+  comparable view.
+- **CORE PRINCIPLE:** "אתה שופט, Atlas אוסף" (you judge, Atlas gathers). Keep human +
+  delightful: taste, judgment, exploration (the fun). Absorb into Atlas: gathering,
+  structuring, synthesis (the תכלול drudgery). **NEVER automate the judgment; ALWAYS absorb
+  the collection.**
+- **PAIN it kills:** fragmentation across many engines + the hard manual consolidation.
+  **FUN it preserves:** exploring by economics (flight cost, cost-of-living, lodging,
+  transport) and by character (sites / routes / attractions / culture).
+- **DIFFERENTIATOR:** not any single stage (others do each) — the seamless, enjoyable
+  **continuity across the arc** + consolidation-with-trust-in-an-Israeli-lens. Provenance
+  badges = trustworthy consolidation; the uniform template = the consolidated format; the
+  hierarchy = the funnel.
+- **TIERED CONSOLIDATION** (protects trust + buildability):
+  - *Stable/sourceable* (cost-of-living, visa, attraction/culture types, climate) →
+    consolidate **natively** with provenance.
+  - *Volatile/live* (flight fares, lodging prices) → **guidance + deep-link hand-off**
+    (Booking / Google Flights), NOT live aggregation.
+  - *Soft/estimated* (seasonal price, with/without-stops) → tag provenance as "הערכה",
+    never as documented fact.
+- **BUILD ORDER = chronological along the trip arc:** research (now: map + card + compare)
+  → narrow/favorite → detailed planning (route) → execution (connections: sleep, flight
+  estimate via hand-off).
+- **Discovery mechanism** (when micro lands): "pull 3, refresh for next tier", classic-first
+  by search/recommendation prominence, dedupe across refreshes — on-demand enrichment as
+  progressive disclosure; the KB accretes as people explore.
+- **Region = a GROUPING LABEL** on destinations ("North Italy"), NOT a 5th hierarchy level.
+
+---
+
 ## Vision
 
 Travel research today is scattered across forums and Facebook groups — unstructured,
