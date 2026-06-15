@@ -33,8 +33,9 @@ function ensureRtlTextPlugin() {
     return;
   }
   rtlPluginRequested = true;
-  // maplibre-gl v4 signature is (url, lazy). lazy:false → load eagerly so labels shape
-  // on first paint. Errors surface via the returned promise.
+  // setRTLTextPlugin(url, lazy) — signature unchanged from v4 to v5 (verified under
+  // maplibre-gl 5.24: Hebrew labels still shape correctly, גרמניה not הינמרג). lazy:false
+  // → load eagerly so labels shape on first paint. Errors surface via the returned promise.
   maplibregl
     .setRTLTextPlugin("/mapbox-gl-rtl-text.js", false)
     .catch((err) => console.error("[MapView] RTL text plugin failed to load:", err));
