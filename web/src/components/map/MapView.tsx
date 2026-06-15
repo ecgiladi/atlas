@@ -21,6 +21,27 @@ import styles from "./MapView.module.css";
 const OCEAN = "#dfe6ec";
 const ISO_PROP = "ISO_A3_EH";
 
+// MapLibre/WebGL does NOT apply bidi/RTL shaping to glyphs on its own, so Hebrew on-map
+// labels render reversed (גרמניה → "הינמרג"). The RTL text plugin fixes shaping. It's a
+// global, set-once call (throws if invoked twice — matters under React strict-mode remount),
+// so guard it. Hosted locally in /public to keep the no-external-runtime approach used for
+// glyphs. lazy:false → labels shape correctly on the very first paint, not after an idle event.
+let rtlPluginRequested = false;
+function ensureRtlTextPlugin() {
+  if (rtlPluginRequested || maplibregl.getRTLTextPluginStatus() !== "unavailable") {
+    rtlPluginRequested = true;
+    return;
+  }
+  rtlPluginRequested = true;
+  maplibregl.setRTLTextPlugin(
+    "/mapbox-gl-rtl-text.js",
+    (err) => {
+      if (err) console.error("[MapView] RTL text plugin failed to load:", err);
+    },
+    false
+  );
+}
+
 function metricValueLabel(metric: Metric, d: CountryDatum | undefined): string {
   if (!d) return "אין נתונים";
   if (metric === "visa") return visaLabelHe(d.visa_status);
@@ -50,6 +71,7 @@ export default function MapView() {
   // init once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    ensureRtlTextPlugin();
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: {
