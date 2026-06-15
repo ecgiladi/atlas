@@ -50,34 +50,59 @@ export interface FavoriteState {
 
 const BASE = "/api/favorites";
 
-async function asJson<T>(r: Response): Promise<T> {
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return (await r.json()) as T;
+// A fetch error that carries the HTTP status + (truncated) response body, so a failure
+// on the actual device surfaces the *why* (status + body) instead of a bare "failed".
+// Network-layer failures (offline, blocked, CORS, mixed-content) become FetchError too.
+export class FetchError extends Error {
+  status: number;
+  body: string;
+  constructor(message: string, status: number, body: string) {
+    super(message);
+    this.name = "FetchError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+async function request(method: string, path: string, payload?: unknown): Promise<Response> {
+  let r: Response;
+  try {
+    r = await fetch(path, {
+      method,
+      headers: payload !== undefined ? { "content-type": "application/json" } : undefined,
+      body: payload !== undefined ? JSON.stringify(payload) : undefined,
+    });
+  } catch (netErr) {
+    // fetch() rejects only on a network-layer failure — no HTTP status exists.
+    const msg = netErr instanceof Error ? netErr.message : String(netErr);
+    throw new FetchError(`${method} ${path} network error: ${msg}`, 0, msg);
+  }
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new FetchError(`${method} ${path} → HTTP ${r.status}`, r.status, body);
+  }
+  return r;
 }
 
 export async function getFavoriteState(ref: string): Promise<FavoriteState> {
-  return asJson<FavoriteState>(await fetch(`${BASE}/${encodeURIComponent(ref)}`));
+  const r = await request("GET", `${BASE}/${encodeURIComponent(ref)}`);
+  return (await r.json()) as FavoriteState;
 }
 
 export async function listFavorites(status?: SavedStatus): Promise<FavoriteEntry[]> {
   const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  return asJson<FavoriteEntry[]>(await fetch(`${BASE}${qs}`));
+  const r = await request("GET", `${BASE}${qs}`);
+  return (await r.json()) as FavoriteEntry[];
 }
 
 export async function putFavorite(
   ref: string,
   status: SavedStatus
 ): Promise<FavoriteEntry> {
-  return asJson<FavoriteEntry>(
-    await fetch(`${BASE}/${encodeURIComponent(ref)}`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status }),
-    })
-  );
+  const r = await request("PUT", `${BASE}/${encodeURIComponent(ref)}`, { status });
+  return (await r.json()) as FavoriteEntry;
 }
 
 export async function deleteFavorite(ref: string): Promise<void> {
-  const r = await fetch(`${BASE}/${encodeURIComponent(ref)}`, { method: "DELETE" });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  await request("DELETE", `${BASE}/${encodeURIComponent(ref)}`);
 }

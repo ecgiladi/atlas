@@ -10,8 +10,26 @@ import {
   getFavoriteState,
   putFavorite,
   deleteFavorite,
+  FetchError,
 } from "./favorites";
 import styles from "./SaveControl.module.css";
+
+// Turn any thrown error into one Hebrew line + a detailed console log (status + body).
+// We DELIBERATELY do not hide failures: a silent optimistic revert makes a broken save
+// look like "nothing happened", which is exactly the device bug we're chasing.
+function reportError(action: string, e: unknown): string {
+  if (e instanceof FetchError) {
+    console.error(`[SaveControl] ${action} failed`, {
+      status: e.status,
+      body: e.body,
+      message: e.message,
+    });
+    if (e.status === 0) return "השמירה נכשלה — אין חיבור לשרת.";
+    return `השמירה נכשלה (שגיאה ${e.status}).`;
+  }
+  console.error(`[SaveControl] ${action} failed`, e);
+  return "השמירה נכשלה.";
+}
 
 // The "אתה שופט" capture on a place card: save (heart) defaults to 'shortlist', a small
 // status selector records the judgment (מתלבט / רוצה / הייתי), toggling the heart off
@@ -28,18 +46,24 @@ export default function SaveControl({
   const [status, setStatus] = useState<SavedStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Sync to server state when the place changes or favorites mutate elsewhere
-  // (e.g. removed from the favorites sheet).
+  // (e.g. removed from the favorites sheet). A failed read is shown, not swallowed —
+  // otherwise a saved place looks unsaved (empty heart) and the next tap "loses" it.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     getFavoriteState(placeRef)
       .then((s) => {
         if (!cancelled) setStatus(s.saved ? s.status : null);
       })
-      .catch(() => {
-        if (!cancelled) setStatus(null);
+      .catch((e) => {
+        if (!cancelled) {
+          setStatus(null);
+          setError(reportError("load", e));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -55,6 +79,7 @@ export default function SaveControl({
     if (busy) return;
     const prev = status;
     setBusy(true);
+    setError(null);
     try {
       if (saved) {
         setStatus(null); // optimistic
@@ -65,8 +90,8 @@ export default function SaveControl({
       }
       onChanged();
     } catch (e) {
-      setStatus(prev); // revert
-      console.error("[SaveControl] toggle failed:", e);
+      setStatus(prev); // revert — but loudly: show the error so it isn't a silent no-op
+      setError(reportError(saved ? "remove" : "save", e));
     } finally {
       setBusy(false);
     }
@@ -76,13 +101,14 @@ export default function SaveControl({
     if (busy || next === status) return;
     const prev = status;
     setBusy(true);
+    setError(null);
     setStatus(next); // optimistic
     try {
       await putFavorite(placeRef, next);
       onChanged();
     } catch (e) {
       setStatus(prev);
-      console.error("[SaveControl] status change failed:", e);
+      setError(reportError("status change", e));
     } finally {
       setBusy(false);
     }
@@ -117,6 +143,12 @@ export default function SaveControl({
             </button>
           ))}
         </div>
+      )}
+
+      {error && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
       )}
     </section>
   );

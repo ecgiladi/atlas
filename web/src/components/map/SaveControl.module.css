@@ -76,3 +76,9 @@
 .statusActive:hover:not(:disabled) {
   background: var(--atlas-accent);
 }
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: #c0445b;
+}

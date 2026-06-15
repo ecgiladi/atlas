@@ -68,6 +68,7 @@ export default function FavoritesSheet({
 
   async function remove(ref: string) {
     const prev = entries;
+    setError(null);
     setEntries((es) => es.filter((e) => e.place.ref !== ref)); // optimistic
     try {
       await deleteFavorite(ref);
@@ -75,6 +76,7 @@ export default function FavoritesSheet({
     } catch (e) {
       setEntries(prev); // revert
       console.error("[FavoritesSheet] remove failed:", e);
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
