@@ -2,7 +2,8 @@
 
 **Personal, Hebrew-RTL, map-first travel discovery & comparison tool for an Israeli traveler.**
 
-Last updated: 2026-06-14 · Status: bootstrap (data model + seed only, no UI yet)
+Last updated: 2026-06-15 · Status: map shell + place card shipped & merged to `master`
+(private remote `git@github.com:ecgiladi/atlas.git`). Next: compare view.
 
 ---
 
@@ -75,8 +76,9 @@ See the migration `backend/alembic/versions/0001_initial_schema.py` and models i
 
 ## Stack & infra
 
-FastAPI + Next.js 14 (App Router) + PostgreSQL + Redis, Docker (Babel, not SWC),
-uv (Python) / pnpm (web), nginx routing, daily `pg_dump`.
+FastAPI + Next.js 14 (App Router) + PostgreSQL + Redis, Docker (**SWC, not Babel** —
+see Map shell note), uv (Python) / pnpm (web), nginx routing, daily `pg_dump`.
+Remote: PRIVATE `git@github.com:ecgiladi/atlas.git` (VPS ed25519 SSH key, account `ecgiladi`).
 
 **Assigned for Atlas (confirmed 2026-06-14):**
 | Resource   | Value                       |
@@ -133,8 +135,18 @@ uv (Python) / pnpm (web), nginx routing, daily `pg_dump`.
      via feature-state so every country is selectable regardless of polygon. **Prefer markers
      over switching to NE 50m** — forward-compatible with the coming city pins.
    - NEXT (zoom→city/site markers, vector basemap) deferred to the city-zoom session.
-3. **Place card** — the template, rendered with per-field provenance badges.
+3. **Place card** — ✅ DONE (country level), merged to `master`. `GET /api/places/{ref}`
+   (resolve by iso3/slug/UUID) returns identity + `is_home` + all 17 comparison axes (explicit
+   NULLs) + a per-field `provenance` map (`source_url/fetched_at/note/origin`) via the inheritance
+   resolver. Frontend `web/src/components/map/`: `PlaceCard` (the template — header chips
+   level/בית/מידע-חלקי, essentials visa-pill/cost/flight) + `ProvenanceBadge` (quiet Lucide
+   affordance next to each value; hover/tap popover names the source — cost→"הבנק העולמי 2024" +
+   link, visa→"ויקיפדיה" + link, flight→"חושב" + method, no link). Empty axes collapse to one line
+   "פרטים נוספים יתווספו בהעשרה". Israel/home → baseline cost "100 · בסיס ההשוואה", no self-visa.
+   Panel anchors `inset-inline-end` (left in RTL) to clear the right-side toggle + legend.
+   **STOPPED before compare view** (next).
 4. **Compare view** — side-by-side within a level, over the comparison axes; sort/rank.
+   Reuses `PlaceCard` as the per-place template.
 5. **Extraction pipeline (MICRO)** — Claude API + web search → extract into template with
    per-field citations; same pattern as GigaBait recipe module.
 6. **Filters** — by axis (season, cost band, flight band, safety, good_for tags, character,
