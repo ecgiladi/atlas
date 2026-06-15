@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.routers.favorites import router as favorites_router
 from app.routers.maps import router as maps_router
 from app.routers.places import router as places_router
 
@@ -25,6 +26,7 @@ app.add_middleware(
 
 app.include_router(maps_router)
 app.include_router(places_router)
+app.include_router(favorites_router)
 
 
 @app.get("/api/health")
