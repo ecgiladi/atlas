@@ -10,7 +10,7 @@ import Legend from "./Legend";
 import PlaceCard from "./PlaceCard";
 import DestinationPanel from "./DestinationPanel";
 import FavoritesSheet from "./FavoritesSheet";
-import { listFavorites } from "./favorites";
+import { listFavorites, type FavoriteEntry } from "./favorites";
 import {
   BORDER_COLOR,
   HOME_LINE,
@@ -37,6 +37,36 @@ const OCEAN_GLOBE = "#a7bccd";
 const ISO_PROP = "ISO_A3_EH";
 const SAVED_LINE = "#c0445b"; // warm "saved" marker outline (matches the card heart)
 const DEST_ACCENT = "#b5651d"; // destination pin (warm, distinct from the choropleth fills)
+
+// Saved-place globe pins, colored by the human's call (status). Muted tones, picked to read
+// on the planet palette without fighting it (tunable — nudge on device): been=green (the
+// "done / lived it" call), want=red (matches the saved heart/outline), shortlist=amber
+// (still deciding). Kept slightly desaturated so they sit on the globe, not over it.
+const PIN_COLOR_BEEN = "#4f9d75"; // הייתי — muted green
+const PIN_COLOR_WANT = "#c0445b"; // רוצה — same warm red as the saved outline / card heart
+const PIN_COLOR_SHORTLIST = "#d4a13c"; // מתלבט — muted amber
+
+// Build the saved-place pin overlay (GLOBE / world view) from the /api/favorites payload.
+// Each saved place plots at its lat/lng — a city point, or for a saved COUNTRY its centroid
+// (both already live on the place row, so a country pin just works). Skips null geo (no
+// 0,0 ghost pin / crash) and dedupes by place id so a place that appears twice -> one pin.
+// `status` rides on the feature and drives the circle color; `ref` is the id the card opens.
+function pinFeatureCollection(favs: FavoriteEntry[]) {
+  const seen = new Set<string>();
+  const features = [];
+  for (const f of favs) {
+    const { id, ref, name_he, lat, lng } = f.place;
+    if (lat == null || lng == null) continue; // null geo -> skip gracefully
+    if (seen.has(id)) continue; // dedupe
+    seen.add(id);
+    features.push({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [lng, lat] },
+      properties: { ref, status: f.status, name_he },
+    });
+  }
+  return { type: "FeatureCollection" as const, features };
+}
 
 // Reuse the one-point-per-feature pattern (from the label-points work): destinations are
 // points of the same shape, so they ride a geojson Point source + circle/label layers.
@@ -376,12 +406,11 @@ export default function MapView() {
       // TWO DISTINCT pin usages coexist — separate sources + layer ids, never clobbering,
       // each shown/hidden by mode (see the pin-visibility effect):
       //
-      // (a) SAVED-PLACE pins — the personal GLOBE overlay (green = been, red = favorite).
-      //     Scaffold: an EMPTY source for now; favorites save + per-place lat/lng land on
-      //     feat/favorites. Seam to populate later: fetch GET /api/favorites, map each saved
-      //     place (status 'been' -> kind 'been'; otherwise 'favorite') to a Point at its
-      //     lat/lng, and source.setData(fc). Styling keys off `kind`. (Country-level markers
-      //     can instead reuse the "country-points" source above.) Added FIRST -> below the
+      // (a) SAVED-PLACE pins — the personal GLOBE overlay, colored by the human's call
+      //     (status): been=green, want=red, shortlist=amber. Populated from GET /api/favorites
+      //     via pinFeatureCollection() in the favorites-sync effect below, and kept live on
+      //     favVersion bumps (a save anywhere -> the pin appears without reload). Country-level
+      //     saves plot at their centroid (lat/lng on the place row). Added FIRST -> below the
       //     funnel's destination pins in z-order.
       map.addSource("pins", {
         type: "geojson",
@@ -397,12 +426,24 @@ export default function MapView() {
           "circle-stroke-color": "#ffffff",
           "circle-color": [
             "match",
-            ["get", "kind"],
-            "been", "#4caf7d", // green
-            "favorite", "#c0445b", // red
-            "#6b747d", // fallback
+            ["get", "status"],
+            "been", PIN_COLOR_BEEN,
+            "want", PIN_COLOR_WANT,
+            "shortlist", PIN_COLOR_SHORTLIST,
+            "#6b747d", // fallback (unknown status)
           ],
         },
+      });
+      // Tap a saved pin -> open its PlaceCard (same path as a destination pin / region click).
+      map.on("click", "pins", (e) => {
+        if (!e.features?.length) return;
+        setSelectedRef(e.features[0].properties?.ref as string);
+      });
+      map.on("mouseenter", "pins", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "pins", () => {
+        map.getCanvas().style.cursor = "";
       });
 
       // (b) DESTINATION pins — the drill funnel's city pins. Empty until a country is
@@ -507,6 +548,9 @@ export default function MapView() {
         if (!e.features?.length) return;
         const id = e.features[0].id as string; // iso3 (== promoteId)
         if (modeRef.current === "world") {
+          // A saved-place pin sits above the fill in world mode; if one is under the click,
+          // let its own handler open the card instead of drilling into the country.
+          if (map.queryRenderedFeatures(e.point, { layers: ["pins"] }).length) return;
           // On the globe, a click DRILLS IN: fly to the country's bounds. Crossing the
           // zoom threshold flips to region mode (choropleth + toggle) and the adaptive
           // projection morphs globe -> flat. Clamp zoom so even large countries enter region.
@@ -655,9 +699,11 @@ export default function MapView() {
     src?.setData({ type: "FeatureCollection", features: [] });
   }
 
-  // Reflect saved countries on the map: re-fetch favorites and set the `saved`
-  // feature-state for every country (so un-saving clears the outline too). Re-runs on
-  // favVersion bumps (a save/remove anywhere) and once the map is ready.
+  // Reflect favorites on the map from a single /api/favorites fetch: (1) the `saved`
+  // feature-state outline on every country (so un-saving clears it too), and (2) the
+  // saved-place GLOBE pins (status-colored, plotted at each place's geo). Re-runs on
+  // favVersion bumps (a save/remove anywhere) and once the map is ready, so a save makes
+  // its pin appear without a reload; an unsave makes it disappear.
   useEffect(() => {
     if (!ready) return;
     const map = mapRef.current;
@@ -675,6 +721,8 @@ export default function MapView() {
             { saved: savedIso.has(iso) }
           );
         }
+        const pins = map.getSource("pins") as maplibregl.GeoJSONSource | undefined;
+        pins?.setData(pinFeatureCollection(favs));
       })
       .catch((e) => console.error("[MapView] favorites marker sync failed:", e));
     return () => {
