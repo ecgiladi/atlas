@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { Globe2 } from "lucide-react";
 
 import MetricToggle from "./MetricToggle";
 import Legend from "./Legend";
@@ -26,7 +27,11 @@ import {
 import type { CountryDatum } from "./types";
 import styles from "./MapView.module.css";
 
-const OCEAN = "#dfe6ec";
+const OCEAN = "#dfe6ec"; // flat-map ocean (region view) — unchanged
+// Globe sea: a soft, muted blue (calm, not saturated) so the sphere reads as Earth. The
+// background layer interpolates from this at world zoom to OCEAN by the region threshold,
+// so the flat region map keeps its existing light ocean exactly.
+const OCEAN_GLOBE = "#a7bccd";
 const ISO_PROP = "ISO_A3_EH";
 const DEST_ACCENT = "#b5651d"; // destination pin (warm, distinct from the choropleth fills)
 
@@ -61,6 +66,22 @@ function fitToDestinations(map: maplibregl.Map, dests: Destination[]) {
   );
 }
 
+// Neutral land fill for the world/globe view: the country layer is present (click targets +
+// subtle definition) but carries NO metric color — the globe is the clean, personal frame,
+// not the heatmap. The metric choropleth only appears once you drill into a region. A hair
+// warm so it doesn't wash out against the richer ocean.
+const LAND_NEUTRAL = "#d3cdbe";
+
+// The map is ONE instance with two zoom bands ("modes"):
+//   world  (zoom < threshold): globe projection, neutral fills, pins, no toggle/legend.
+//   region (zoom >= threshold): morphed-flat Mercator, metric choropleth, toggle + legend.
+// Mode is derived purely from zoom; the globe projection is adaptive (v5) and morphs
+// globe<->flat on its own as zoom crosses ~5, so we never swap projections by hand.
+type ViewMode = "world" | "region";
+const REGION_ZOOM_THRESHOLD = 3.6; // at/above this we're "in a region": show the choropleth
+const REGION_ZOOM_MIN = 4.2; // drilling in always lands at least here (so big countries enter region too)
+const WORLD_HOME = { center: [12, 22] as [number, number], zoom: 1.05 }; // the globe landing camera
+
 // MapLibre/WebGL does NOT apply bidi/RTL shaping to glyphs on its own, so Hebrew on-map
 // labels render reversed (גרמניה → "הינמרג"). The RTL text plugin fixes shaping. It's a
 // global, set-once call (throws if invoked twice — matters under React strict-mode remount),
@@ -73,8 +94,9 @@ function ensureRtlTextPlugin() {
     return;
   }
   rtlPluginRequested = true;
-  // maplibre-gl v4 signature is (url, lazy). lazy:false → load eagerly so labels shape
-  // on first paint. Errors surface via the returned promise.
+  // setRTLTextPlugin(url, lazy) — signature unchanged from v4 to v5 (verified under
+  // maplibre-gl 5.24: Hebrew labels still shape correctly, גרמניה not הינמרג). lazy:false
+  // → load eagerly so labels shape on first paint. Errors surface via the returned promise.
   maplibregl
     .setRTLTextPlugin("/mapbox-gl-rtl-text.js", false)
     .catch((err) => console.error("[MapView] RTL text plugin failed to load:", err));
@@ -90,20 +112,51 @@ function metricValueLabel(metric: Metric, d: CountryDatum | undefined): string {
     : `~${d.flight_from_tlv_minutes} דק׳`;
 }
 
+const modeForZoom = (zoom: number): ViewMode =>
+  zoom >= REGION_ZOOM_THRESHOLD ? "region" : "world";
+
+// Axis-aligned bbox over a GeoJSON Polygon/MultiPolygon ring set. Good enough to fitBounds;
+// dateline-spanning countries (Russia, Fiji) get a wide box — acceptable for a drill-in.
+function bboxOf(geometry: any): [number, number, number, number] | null {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const visit = (coords: any) => {
+    if (typeof coords[0] === "number") {
+      const [x, y] = coords;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    } else {
+      for (const c of coords) visit(c);
+    }
+  };
+  if (!geometry?.coordinates) return null;
+  visit(geometry.coordinates);
+  return Number.isFinite(minX) ? [minX, minY, maxX, maxY] : null;
+}
+
 export default function MapView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const dataRef = useRef<Map<string, CountryDatum>>(new Map());
   const metricRef = useRef<Metric>("visa");
   const hoveredRef = useRef<string | null>(null);
+  // Per-country bbox, computed once from the geojson, so a world-mode click can fitBounds
+  // to drill in without re-reading geometry off the (possibly clipped) click event.
+  const bboxByIso = useRef<Map<string, [number, number, number, number]>>(new Map());
+  const modeRef = useRef<ViewMode>("world");
 
   const [metric, setMetric] = useState<Metric>("visa");
   // The selected place's iso3/slug — the card fetches its own full detail from this.
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
-  // Drill funnel: which country we're exploring, its destinations, and how many are revealed.
+  // Which zoom band we're in (globe baseline). Drives toggle/legend/back visibility,
+  // neutral-vs-metric fills, and saved-pin visibility.
+  const [mode, setMode] = useState<ViewMode>("world");
+  // Drill funnel (a deeper state off the region view): which country we're exploring, its
+  // destinations, and how many are revealed.
   const [drillRef, setDrillRef] = useState<string | null>(null);
   const [destData, setDestData] = useState<DestinationsResponse | null>(null);
-  // Region filter (null = הכל). Filters the funnel + pins; not a forced step.
+  // Region filter (null = הכל). Filters the funnel + destination pins; not a forced step.
   const [activeRegion, setActiveRegion] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(REVEAL_STEP);
   const [drillLoading, setDrillLoading] = useState(false);
@@ -132,10 +185,30 @@ export default function MapView() {
         version: 8,
         glyphs: "/font/{fontstack}/{range}.pbf",
         sources: {},
-        layers: [{ id: "ocean", type: "background", paint: { "background-color": OCEAN } }],
+        // The background layer is the globe's sea (and the flat map's ocean once zoomed
+        // in). Space around the sphere is the container's CSS background. Muted blue at
+        // world zoom -> the existing light ocean by the region threshold, so the flat
+        // region map is visually unchanged.
+        layers: [
+          {
+            id: "ocean",
+            type: "background",
+            paint: {
+              "background-color": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                2,
+                OCEAN_GLOBE,
+                REGION_ZOOM_THRESHOLD,
+                OCEAN,
+              ],
+            },
+          },
+        ],
       },
-      center: [18, 30],
-      zoom: 1.4,
+      center: WORLD_HOME.center,
+      zoom: WORLD_HOME.zoom,
       renderWorldCopies: false,
       attributionControl: false,
     });
@@ -171,25 +244,68 @@ export default function MapView() {
 
     map.on("load", async () => {
       try {
-      const [geo, rows] = await Promise.all([
+      // Globe projection (MapLibre v5): adaptive composite — renders as a globe at low
+      // zoom and morphs to flat Mercator as you zoom into a region. One map, two views.
+      map.setProjection({ type: "globe" });
+
+      // Atmosphere (v5 sky spec): a soft blue glow at the limb over dark space, so the
+      // globe reads as a planet rather than a flat circle. Kept subtle. atmosphere-blend
+      // fades to 0 as we zoom into a region, so the flat map gets no sky/fog.
+      map.setSky({
+        // Space above the atmosphere — a lighter slate/blue-grey (was the deep night-navy
+        // #0a1326, which read heavy and masked the CSS radial). Matches the lightened .map
+        // radial's outer slate; still dark enough that the limb-glow + outlines read.
+        "sky-color": "#25324c",
+        "sky-horizon-blend": 0.7,
+        "horizon-color": "#8fb8e0", // soft blue limb glow
+        "horizon-fog-blend": 0.5,
+        "fog-color": "#cfe0f0", // pale near-surface haze
+        "fog-ground-blend": 0.0,
+        "atmosphere-blend": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          0,
+          0.6,
+          4,
+          0.3,
+          6,
+          0,
+        ],
+      });
+
+      const [geo, points, rows] = await Promise.all([
         fetchJson("/ne_110m_admin0.geojson"),
+        // One representative Point per country (precomputed pole-of-inaccessibility of the
+        // largest polygon). Labels ride on THIS, not the fill source, so a MultiPolygon
+        // country (Canada/Russia/USA) gets one label, not one per island/exclave.
+        fetchJson("/country_label_points.geojson"),
         fetchJson("/api/map/countries") as Promise<CountryDatum[]>,
       ]);
       const byIso = new Map(rows.map((d) => [d.iso3, d]));
       dataRef.current = byIso;
 
-      // merge name_he into properties (labels only for countries we have data for)
+      // cache each country's bbox (for the world-mode drill-in fitBounds).
       for (const f of geo.features) {
-        const rec = byIso.get(f.properties[ISO_PROP]);
+        const iso = f.properties[ISO_PROP];
+        const bb = bboxOf(f.geometry);
+        if (bb && iso) bboxByIso.current.set(iso, bb);
+      }
+
+      // merge name_he onto the label points (only countries we have data for get a name).
+      for (const f of points.features) {
+        const rec = byIso.get(f.properties.iso_a3);
         f.properties.name_he = rec ? rec.name_he : "";
       }
 
       map.addSource("countries", { type: "geojson", data: geo, promoteId: ISO_PROP });
+      // Start neutral: the landing view is the globe (world mode). The mode effect swaps
+      // this to the metric choropleth when the user drills into a region.
       map.addLayer({
         id: "country-fill",
         type: "fill",
         source: "countries",
-        paint: { "fill-color": fillColorExpression("visa"), "fill-opacity": 0.92 },
+        paint: { "fill-color": LAND_NEUTRAL, "fill-opacity": 0.92 },
       });
       map.addLayer({
         id: "country-border",
@@ -213,16 +329,23 @@ export default function MapView() {
         filter: ["==", ["get", ISO_PROP], "ISR"],
         paint: { "line-color": HOME_LINE, "line-width": 1.8 },
       });
+      // One Point per country — the reusable country-keyed dataset. Labels live here so
+      // each country is named exactly once; country-level markers (microstates with no
+      // 110m polygon, future country pins) can ride on this same source by iso_a3.
+      map.addSource("country-points", { type: "geojson", data: points, promoteId: "iso_a3" });
       map.addLayer({
         id: "country-label",
         type: "symbol",
-        source: "countries",
+        source: "country-points",
         layout: {
           "text-field": ["get", "name_he"],
           "text-font": ["Noto Sans Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 1, 9, 4, 13],
+          // allow-overlap:false declutters the globe (only non-colliding labels render);
+          // sort-key keeps the home country (Israel) label as the first to win a slot.
           "text-allow-overlap": false,
           "text-padding": 4,
+          "symbol-sort-key": ["case", ["==", ["get", "iso_a3"], "ISR"], 0, 1],
         },
         paint: {
           "text-color": "#33383e",
@@ -231,8 +354,42 @@ export default function MapView() {
         },
       });
 
-      // Destination pins (drill-down). Empty until a country is drilled; the reveal effect
-      // sets the data so pins grow with the card list. Same point-source pattern as labels.
+      // TWO DISTINCT pin usages coexist — separate sources + layer ids, never clobbering,
+      // each shown/hidden by mode (see the pin-visibility effect):
+      //
+      // (a) SAVED-PLACE pins — the personal GLOBE overlay (green = been, red = favorite).
+      //     Scaffold: an EMPTY source for now; favorites save + per-place lat/lng land on
+      //     feat/favorites. Seam to populate later: fetch GET /api/favorites, map each saved
+      //     place (status 'been' -> kind 'been'; otherwise 'favorite') to a Point at its
+      //     lat/lng, and source.setData(fc). Styling keys off `kind`. (Country-level markers
+      //     can instead reuse the "country-points" source above.) Added FIRST -> below the
+      //     funnel's destination pins in z-order.
+      map.addSource("pins", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "pins",
+        type: "circle",
+        source: "pins",
+        paint: {
+          "circle-radius": 6,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+          "circle-color": [
+            "match",
+            ["get", "kind"],
+            "been", "#4caf7d", // green
+            "favorite", "#c0445b", // red
+            "#6b747d", // fallback
+          ],
+        },
+      });
+
+      // (b) DESTINATION pins — the drill funnel's city pins. Empty until a country is
+      //     drilled; the reveal effect sets the data so pins grow with the card list. Same
+      //     point-source pattern as the country labels. Added LAST -> destination pins +
+      //     labels sit on top (the funnel is the focused, deeper view).
       map.addSource("destinations", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -313,7 +470,8 @@ export default function MapView() {
           x: e.point.x,
           y: e.point.y,
           name: d?.name_he || (f.properties?.ADMIN as string) || "",
-          value: metricValueLabel(metricRef.current, d),
+          // World mode is the clean/personal frame: show the name only, no metric value.
+          value: modeRef.current === "region" ? metricValueLabel(metricRef.current, d) : "",
         });
       });
       map.on("mouseleave", "country-fill", () => {
@@ -329,8 +487,39 @@ export default function MapView() {
       map.on("click", "country-fill", (e) => {
         if (!e.features?.length) return;
         const id = e.features[0].id as string; // iso3 (== promoteId)
-        setSelectedRef(id);
+        if (modeRef.current === "world") {
+          // On the globe, a click DRILLS IN: fly to the country's bounds. Crossing the
+          // zoom threshold flips to region mode (choropleth + toggle) and the adaptive
+          // projection morphs globe -> flat. Clamp zoom so even large countries enter region.
+          const bb = bboxByIso.current.get(id);
+          if (bb) {
+            const cam = map.cameraForBounds(
+              [[bb[0], bb[1]], [bb[2], bb[3]]],
+              { padding: 60, maxZoom: 6 }
+            );
+            const center = cam?.center ?? [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2];
+            const zoom = Math.max(
+              typeof cam?.zoom === "number" ? cam.zoom : REGION_ZOOM_MIN,
+              REGION_ZOOM_MIN
+            );
+            map.flyTo({ center: center as [number, number], zoom, duration: 1800 });
+          }
+        } else {
+          // In a region (flat) the existing behaviour: open the place card.
+          setSelectedRef(id);
+        }
       });
+
+      // Derive view mode from zoom; flip React state only on an actual band change.
+      const syncMode = () => {
+        const next = modeForZoom(map.getZoom());
+        if (next !== modeRef.current) {
+          modeRef.current = next;
+          setMode(next);
+        }
+      };
+      map.on("zoom", syncMode);
+      syncMode();
 
       clearTimeout(timeout);
       readyRef.current = true;
@@ -351,14 +540,51 @@ export default function MapView() {
     };
   }, []);
 
-  // metric toggle -> repaint fill (instant; no source reload)
+  // mode change -> swap the country fill between neutral (world/globe) and the metric
+  // choropleth (region). Driven by the zoom band, not a user toggle.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer("country-fill")) return;
+    map.setPaintProperty(
+      "country-fill",
+      "fill-color",
+      mode === "region" ? fillColorExpression(metricRef.current) : LAND_NEUTRAL
+    );
+  }, [mode, ready]);
+
+  // metric toggle -> repaint fill (instant; no source reload). Only meaningful in region
+  // mode; in world mode the fill is neutral and the toggle is hidden.
   useEffect(() => {
     metricRef.current = metric;
     const map = mapRef.current;
-    if (map && map.getLayer("country-fill")) {
+    if (map && map.getLayer("country-fill") && mode === "region") {
       map.setPaintProperty("country-fill", "fill-color", fillColorExpression(metric));
     }
-  }, [metric]);
+  }, [metric, mode]);
+
+  // Pin visibility by mode — the two pin sets never co-show, keeping each to its scope:
+  //   - saved-place pins ("pins") are the GLOBE overlay -> visible in world mode only.
+  //   - destination pins ("destination-pins"/labels) belong to the funnel (a deeper state
+  //     off region) -> visible only while a country's funnel is open (drillRef set). Their
+  //     data is also cleared on close, so this is belt-and-suspenders against stragglers.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const setVis = (id: string, visible: boolean) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+    };
+    setVis("pins", mode === "world");
+    setVis("destination-pins", drillRef != null);
+    setVis("destination-pin-labels", drillRef != null);
+  }, [mode, drillRef, ready]);
+
+  // "חזרה לעולם" (region-back -> globe). Collapse any open funnel first so we never land on
+  // the globe with the destination panel/pins still up — the back stack is funnel -> region
+  // (panel close) -> globe (this). closeDrill is a no-op when no funnel is open.
+  function flyHome() {
+    closeDrill();
+    mapRef.current?.flyTo({ ...WORLD_HOME, duration: 1600 });
+  }
 
   // Reveal effect: keep the pins in sync with the revealed (classic-first) destinations of
   // the ACTIVE region filter, so pins and the card list grow together on each "עוד" and both
@@ -421,12 +647,26 @@ export default function MapView() {
       ) : (
         !ready && <div className={styles.loading}>טוען מפה…</div>
       )}
-      <MetricToggle metric={metric} onChange={setMetric} />
-      <Legend metric={metric} />
+      {/* Metric tools belong to the region view only — the globe stays clean. */}
+      {mode === "region" && (
+        <>
+          <MetricToggle metric={metric} onChange={setMetric} />
+          <Legend metric={metric} />
+          <button
+            type="button"
+            className={styles.backToGlobe}
+            onClick={flyHome}
+            aria-label="חזרה לגלובוס"
+          >
+            <Globe2 size={18} aria-hidden />
+            <span>חזרה לעולם</span>
+          </button>
+        </>
+      )}
       {tooltip && (
         <div className={styles.tooltip} style={{ left: tooltip.x, top: tooltip.y }}>
           <b>{tooltip.name}</b>
-          <span className={styles.metric}>{tooltip.value}</span>
+          {tooltip.value && <span className={styles.metric}>{tooltip.value}</span>}
         </div>
       )}
       {drillRef && (
