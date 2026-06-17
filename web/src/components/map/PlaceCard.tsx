@@ -5,6 +5,7 @@ import { Compass, Home, X } from "lucide-react";
 
 import { VISA_COLORS, visaLabelHe } from "./encodings";
 import ProvenanceBadge from "./ProvenanceBadge";
+import SaveControl from "./SaveControl";
 import { flightBandHe, levelLabelHe, type PlaceDetail } from "./place";
 import styles from "./PlaceCard.module.css";
 
@@ -13,12 +14,16 @@ import styles from "./PlaceCard.module.css";
 export default function PlaceCard({
   placeRef,
   onDrill,
+  favVersion,
+  onFavChanged,
   onClose,
 }: {
   placeRef: string | null;
   // Drill into a country's destinations (shown only when the country has any). Optional so
   // the card stays reusable everywhere (e.g. the tapped-through destination card).
   onDrill?: (ref: string) => void;
+  favVersion: number;
+  onFavChanged: () => void;
   onClose: () => void;
 }) {
   const [place, setPlace] = useState<PlaceDetail | null>(null);
@@ -67,17 +72,31 @@ export default function PlaceCard({
           טעינת הכרטיס נכשלה ({error})
         </p>
       )}
-      {place && <CardBody place={place} onDrill={onDrill} />}
+      {place && (
+        <CardBody
+          place={place}
+          placeRef={placeRef}
+          onDrill={onDrill}
+          favVersion={favVersion}
+          onFavChanged={onFavChanged}
+        />
+      )}
     </aside>
   );
 }
 
 function CardBody({
   place,
+  placeRef,
   onDrill,
+  favVersion,
+  onFavChanged,
 }: {
   place: PlaceDetail;
+  placeRef: string;
   onDrill?: (ref: string) => void;
+  favVersion: number;
+  onFavChanged: () => void;
 }) {
   const prov = place.provenance;
   const isHome = place.is_home;
@@ -113,6 +132,13 @@ function CardBody({
           )}
         </div>
       </header>
+
+      {/* Save / judgment capture — "אתה שופט": records considering / want / been */}
+      <SaveControl
+        placeRef={placeRef}
+        favVersion={favVersion}
+        onChanged={onFavChanged}
+      />
 
       {/* Drill affordance — funnel into this country's destinations (consolidation: from
           the macro country down to the classic destinations within it). */}

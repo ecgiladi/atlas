@@ -20,6 +20,8 @@ export default function DestinationPanel({
   onRegionChange,
   loading,
   error,
+  favVersion,
+  onFavChanged,
   onReveal,
   onOpen,
   onClose,
@@ -33,6 +35,10 @@ export default function DestinationPanel({
   onRegionChange: (value: string | null) => void;
   loading: boolean;
   error: string | null;
+  // Favorites: passed through to each card's SaveControl so a destination can be saved
+  // straight from the funnel, re-syncing the rest of the UI on change.
+  favVersion: number;
+  onFavChanged: () => void;
   onReveal: () => void;
   onOpen: (ref: string) => void;
   onClose: () => void;
@@ -68,7 +74,13 @@ export default function DestinationPanel({
           </p>
           <div className={styles.list} data-testid="destination-cards">
             {visible.map((d) => (
-              <DestinationCard key={d.id} d={d} onOpen={onOpen} />
+              <DestinationCard
+                key={d.id}
+                d={d}
+                onOpen={onOpen}
+                favVersion={favVersion}
+                onFavChanged={onFavChanged}
+              />
             ))}
           </div>
         </>

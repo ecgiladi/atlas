@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Globe2 } from "lucide-react";
+import { Globe2, Heart } from "lucide-react";
 
 import MetricToggle from "./MetricToggle";
 import Legend from "./Legend";
 import PlaceCard from "./PlaceCard";
 import DestinationPanel from "./DestinationPanel";
+import FavoritesSheet from "./FavoritesSheet";
+import { listFavorites } from "./favorites";
 import {
   BORDER_COLOR,
   HOME_LINE,
@@ -33,6 +35,7 @@ const OCEAN = "#dfe6ec"; // flat-map ocean (region view) — unchanged
 // so the flat region map keeps its existing light ocean exactly.
 const OCEAN_GLOBE = "#a7bccd";
 const ISO_PROP = "ISO_A3_EH";
+const SAVED_LINE = "#c0445b"; // warm "saved" marker outline (matches the card heart)
 const DEST_ACCENT = "#b5651d"; // destination pin (warm, distinct from the choropleth fills)
 
 // Reuse the one-point-per-feature pattern (from the label-points work): destinations are
@@ -161,6 +164,11 @@ export default function MapView() {
   const [revealed, setRevealed] = useState(REVEAL_STEP);
   const [drillLoading, setDrillLoading] = useState(false);
   const [drillError, setDrillError] = useState<string | null>(null);
+  // Favorites: a version counter so the card / sheet / map marker all re-sync after a
+  // mutation, and a flag for the favorites sheet.
+  const [favVersion, setFavVersion] = useState(0);
+  const [showFavorites, setShowFavorites] = useState(false);
+  const bumpFav = () => setFavVersion((v) => v + 1);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -328,6 +336,17 @@ export default function MapView() {
         source: "countries",
         filter: ["==", ["get", ISO_PROP], "ISR"],
         paint: { "line-color": HOME_LINE, "line-width": 1.8 },
+      });
+      // Subtle saved-country marker: a warm outline driven by feature-state `saved`.
+      // It's its own line layer, so it never touches the choropleth fill encoding.
+      map.addLayer({
+        id: "country-saved",
+        type: "line",
+        source: "countries",
+        paint: {
+          "line-color": SAVED_LINE,
+          "line-width": ["case", ["boolean", ["feature-state", "saved"], false], 2.5, 0],
+        },
       });
       // One Point per country — the reusable country-keyed dataset. Labels live here so
       // each country is named exactly once; country-level markers (microstates with no
@@ -636,6 +655,33 @@ export default function MapView() {
     src?.setData({ type: "FeatureCollection", features: [] });
   }
 
+  // Reflect saved countries on the map: re-fetch favorites and set the `saved`
+  // feature-state for every country (so un-saving clears the outline too). Re-runs on
+  // favVersion bumps (a save/remove anywhere) and once the map is ready.
+  useEffect(() => {
+    if (!ready) return;
+    const map = mapRef.current;
+    if (!map || !map.getSource("countries")) return;
+    let cancelled = false;
+    listFavorites()
+      .then((favs) => {
+        if (cancelled) return;
+        const savedIso = new Set(
+          favs.map((f) => f.place.iso3).filter((x): x is string => !!x)
+        );
+        for (const iso of dataRef.current.keys()) {
+          map.setFeatureState(
+            { source: "countries", id: iso },
+            { saved: savedIso.has(iso) }
+          );
+        }
+      })
+      .catch((e) => console.error("[MapView] favorites marker sync failed:", e));
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, favVersion]);
+
   return (
     <div className={styles.wrap}>
       <div ref={containerRef} className={styles.map} />
@@ -684,15 +730,36 @@ export default function MapView() {
           onRegionChange={handleRegionChange}
           loading={drillLoading}
           error={drillError}
+          favVersion={favVersion}
+          onFavChanged={bumpFav}
           onReveal={() => setRevealed((r) => Math.min(r + REVEAL_STEP, filteredDests.length))}
           onOpen={(ref) => setSelectedRef(ref)}
           onClose={closeDrill}
         />
       )}
+      {!showFavorites && (
+        <button
+          type="button"
+          className={styles.favFab}
+          onClick={() => setShowFavorites(true)}
+          aria-label="היעדים שלי"
+        >
+          <Heart size={22} aria-hidden />
+        </button>
+      )}
       <PlaceCard
         placeRef={selectedRef}
         onDrill={handleDrill}
+        favVersion={favVersion}
+        onFavChanged={bumpFav}
         onClose={() => setSelectedRef(null)}
+      />
+      <FavoritesSheet
+        open={showFavorites}
+        favVersion={favVersion}
+        onSelectPlace={(ref) => setSelectedRef(ref)}
+        onChanged={bumpFav}
+        onClose={() => setShowFavorites(false)}
       />
     </div>
   );

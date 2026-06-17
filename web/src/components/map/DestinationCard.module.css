@@ -142,3 +142,11 @@
   border-radius: var(--atlas-radius-sm);
   background: var(--atlas-surface-2);
 }
+
+/* Save control on a funnel card — a light divider sets the judgment capture apart from the
+   axes above it. cursor:default so the heart area doesn't read as part of the card button. */
+.save {
+  border-top: 1px solid var(--atlas-line);
+  padding-top: var(--atlas-space-2);
+  cursor: default;
+}

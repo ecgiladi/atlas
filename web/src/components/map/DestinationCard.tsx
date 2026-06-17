@@ -3,6 +3,7 @@
 import { MapPin, Mountain, Building2 } from "lucide-react";
 
 import ProvenanceBadge from "./ProvenanceBadge";
+import SaveControl from "./SaveControl";
 import {
   type Destination,
   monthsHe,
@@ -19,9 +20,13 @@ import styles from "./DestinationCard.module.css";
 export default function DestinationCard({
   d,
   onOpen,
+  favVersion,
+  onFavChanged,
 }: {
   d: Destination;
   onOpen: (ref: string) => void;
+  favVersion: number;
+  onFavChanged: () => void;
 }) {
   const prov = d.provenance ?? {};
   const isNatural = d.site_type === "natural";
@@ -162,6 +167,17 @@ export default function DestinationCard({
           </div>
         )}
       </dl>
+
+      {/* Save the destination straight from the funnel. Wrapped so taps on the heart /
+          status pills don't bubble up to the card's open-on-click (the article is a button). */}
+      <div
+        className={styles.save}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        role="presentation"
+      >
+        <SaveControl placeRef={d.slug} favVersion={favVersion} onChanged={onFavChanged} />
+      </div>
     </article>
   );
 }
