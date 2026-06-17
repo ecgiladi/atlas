@@ -12,11 +12,20 @@ Last updated: 2026-06-17 · Status: **globe world-view frame is the `master` bas
   built by `web/scripts/build_label_points.mjs`), **`setSky` atmosphere** (limb-glow), and the
   **lightened space background** (CSS `.map` radial + `sky-color` raised off the deep night-navy
   to a slate `#25324c` so the lighten actually reads at world zoom).
-- **Unmerged feature branches — rebase onto this new `master` in later integration steps:**
+- **LANDED on `master`:**
+  - `feat/italy-drill` — Italy destination funnel + city ₪ cost axes + region filter
+    (carried the globe base merged-in; fast-forwarded up). Plus the phone-width region-view
+    fix: metric toggle moved to a bottom cluster with the legend, "חזרה לעולם" alone at top.
+  - **Israel home shape** — West Bank (NE "Palestine"/PSE polygon) dissolved INTO Israel so
+    there's no grey island and no internal line, on globe + flat (offline shapely tool
+    `web/scripts/patch_israel_westbank.py`; committed artifact = the patched geojson). Gaza
+    is not a separate polygon at 110m.
+  - `feat/favorites` — folded in (saved_place CRUD, SaveControl on the PlaceCard AND the
+    funnel DestinationCard, FavoritesSheet, on-map saved-country outline, favFab top-right).
+    `GET /api/favorites` now returns geo (lat/lng). The `pins` layer stays scaffolded
+    (empty) for the personal-globe overlay — populated in step D.
+- **Unmerged — rebase onto `master` next:**
   - `feat/compare` — compare view (`GET /api/places/compare` + CompareTray/CompareView).
-  - `feat/favorites` — favorites + the personal-globe pin overlay (the `pins` layer is
-    already scaffolded in `master`'s MapView against an empty source, ready to populate).
-  - `feat/italy-drill` — Italy destination funnel + city ₪ cost axes + region filter.
 
 ---
 
