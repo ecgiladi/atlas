@@ -647,11 +647,11 @@ export default function MapView() {
       ) : (
         !ready && <div className={styles.loading}>טוען מפה…</div>
       )}
-      {/* Metric tools belong to the region view only — the globe stays clean. */}
+      {/* Metric tools belong to the region view only — the globe stays clean. "חזרה לעולם"
+          sits ALONE at the top; the metric toggle is paired with the legend it drives in a
+          bottom cluster, so the two never share the top bar / overlap at phone width. */}
       {mode === "region" && (
         <>
-          <MetricToggle metric={metric} onChange={setMetric} />
-          <Legend metric={metric} />
           <button
             type="button"
             className={styles.backToGlobe}
@@ -661,6 +661,10 @@ export default function MapView() {
             <Globe2 size={18} aria-hidden />
             <span>חזרה לעולם</span>
           </button>
+          <div className={styles.metricCluster}>
+            <MetricToggle metric={metric} onChange={setMetric} />
+            <Legend metric={metric} />
+          </div>
         </>
       )}
       {tooltip && (

@@ -1,8 +1,6 @@
 .legend {
-  position: absolute;
-  bottom: var(--atlas-space-4);
-  right: var(--atlas-space-4);
-  z-index: 10;
+  /* Positioned by the parent .metricCluster (bottom-right, below the metric toggle) — no
+     longer self-anchored so the toggle + legend stack as one cluster, clear of the top. */
   min-width: 180px;
   padding: var(--atlas-space-3) var(--atlas-space-4);
   background: var(--atlas-surface);

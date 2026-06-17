@@ -1,8 +1,6 @@
 .toggle {
-  position: absolute;
-  top: var(--atlas-space-4);
-  right: var(--atlas-space-4);
-  z-index: 10;
+  /* Positioned by the parent .metricCluster (bottom-right, above the legend) — no longer
+     self-anchored, so it can't collide with the top "חזרה לעולם" affordance. */
   display: flex;
   gap: var(--atlas-space-1);
   padding: var(--atlas-space-1);
