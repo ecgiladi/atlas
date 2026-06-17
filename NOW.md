@@ -2,8 +2,21 @@
 
 **Personal, Hebrew-RTL, map-first travel discovery & comparison tool for an Israeli traveler.**
 
-Last updated: 2026-06-15 · Status: map shell + place card shipped & merged to `master`
-(private remote `git@github.com:ecgiladi/atlas.git`). Next: compare view.
+Last updated: 2026-06-17 · Status: **globe world-view frame is the `master` baseline**
+(private remote `git@github.com:ecgiladi/atlas.git`). Next: rebase feature branches onto it.
+
+### Integration state (2026-06-17)
+- **`master` = the globe frame baseline.** Merged `feat/globe` (`--no-ff`, clean): MapLibre
+  GL JS **v5 globe projection** world-view home → drill-down morphs to the **flat region
+  choropleth**, a **one-label-per-country** dedicated point source (`country_label_points.geojson`,
+  built by `web/scripts/build_label_points.mjs`), **`setSky` atmosphere** (limb-glow), and the
+  **lightened space background** (CSS `.map` radial + `sky-color` raised off the deep night-navy
+  to a slate `#25324c` so the lighten actually reads at world zoom).
+- **Unmerged feature branches — rebase onto this new `master` in later integration steps:**
+  - `feat/compare` — compare view (`GET /api/places/compare` + CompareTray/CompareView).
+  - `feat/favorites` — favorites + the personal-globe pin overlay (the `pins` layer is
+    already scaffolded in `master`'s MapView against an empty source, ready to populate).
+  - `feat/italy-drill` — Italy destination funnel + city ₪ cost axes + region filter.
 
 ---
 
