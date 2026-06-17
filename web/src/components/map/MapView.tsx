@@ -195,7 +195,10 @@ export default function MapView() {
       // globe reads as a planet rather than a flat circle. Kept subtle. atmosphere-blend
       // fades to 0 as we zoom into a region, so the flat map gets no sky/fog.
       map.setSky({
-        "sky-color": "#0a1326", // space above the atmosphere
+        // Space above the atmosphere — a lighter slate/blue-grey (was the deep night-navy
+        // #0a1326, which read heavy and masked the CSS radial). Matches the lightened .map
+        // radial's outer slate; still dark enough that the limb-glow + outlines read.
+        "sky-color": "#25324c",
         "sky-horizon-blend": 0.7,
         "horizon-color": "#8fb8e0", // soft blue limb glow
         "horizon-fog-blend": 0.5,
