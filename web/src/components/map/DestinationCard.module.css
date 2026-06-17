@@ -107,6 +107,28 @@
   text-align: start;
 }
 
+/* Soft estimate ("הערכה") — visibly distinct from computed/sourced values: muted + a
+   dashed underline so a guessed ₪ figure never reads as documented fact. */
+.estimate {
+  color: var(--atlas-text-muted);
+  text-decoration: underline dashed;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Flight axis stacks two lines (time + price band), each with its own provenance badge. */
+.flightDd {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.flightLine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--atlas-space-1);
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;

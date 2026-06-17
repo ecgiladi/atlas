@@ -10,6 +10,7 @@ import {
   busyLabelHe,
   siteTypeLabelHe,
 } from "./destinations";
+import { flightPriceBandHe, isEstimate, shekelPer } from "./place";
 import styles from "./DestinationCard.module.css";
 
 // The uniform destination template: the SAME shape for every destination = the consolidated
@@ -26,6 +27,15 @@ export default function DestinationCard({
   const isNatural = d.site_type === "natural";
   const tour = touristyLabelHe(d.character_touristy_authentic);
   const busy = busyLabelHe(d.character_busy_quiet);
+
+  // City cost is absolute ₪ (the cost_vs_israel index is a country tool, dropped here).
+  const daily = shekelPer(d.daily_budget, "ליום");
+  const night = shekelPer(d.price_night, "ללילה");
+  const band = flightPriceBandHe(d.flight_price_band);
+  // Soft estimates render visibly distinct from computed/sourced values.
+  const dailyEst = isEstimate(prov.daily_budget);
+  const nightEst = isEstimate(prov.price_night);
+  const bandEst = isEstimate(prov.flight_price_band);
 
   return (
     <article
@@ -62,18 +72,53 @@ export default function DestinationCard({
 
       {d.culture_section && <p className={styles.blurb}>{d.culture_section}</p>}
 
-      {/* destination axes — uniform for every card; each value carries its provenance */}
+      {/* destination axes — uniform for every card; each value carries its provenance.
+          City cost is absolute ₪ (יום מחיה / יום לינה), never the country index. */}
       <dl className={styles.axes}>
         <div className={styles.axis}>
-          <dt>עלות</dt>
+          <dt>יום מחיה</dt>
           <dd>
-            <span>
-              {d.cost_vs_israel == null
-                ? "אין נתון"
-                : `${d.cost_vs_israel} · ישראל=100`}
+            <span className={dailyEst ? styles.estimate : undefined}>
+              {daily ?? "אין נתון"}
             </span>
-            {prov.cost_vs_israel && (
-              <ProvenanceBadge prov={prov.cost_vs_israel} fieldLabel="עלות" />
+            {prov.daily_budget && (
+              <ProvenanceBadge prov={prov.daily_budget} fieldLabel="יום מחיה" />
+            )}
+          </dd>
+        </div>
+
+        <div className={styles.axis}>
+          <dt>יום לינה</dt>
+          <dd>
+            <span className={nightEst ? styles.estimate : undefined}>
+              {night ?? "אין נתון"}
+            </span>
+            {prov.price_night && (
+              <ProvenanceBadge prov={prov.price_night} fieldLabel="יום לינה" />
+            )}
+          </dd>
+        </div>
+
+        <div className={styles.axis}>
+          <dt>טיסה</dt>
+          <dd className={styles.flightDd}>
+            <span className={styles.flightLine}>
+              <span>
+                {d.flight_from_tlv_minutes == null
+                  ? "אין נתון"
+                  : `~${d.flight_from_tlv_minutes} דק׳`}
+              </span>
+              {prov.flight_from_tlv_minutes && (
+                <ProvenanceBadge prov={prov.flight_from_tlv_minutes} fieldLabel="זמן טיסה" />
+              )}
+            </span>
+            {band && (
+              <span className={styles.flightLine}>
+                <span className={bandEst ? styles.estimate : undefined}>מחיר {band}</span>
+                {prov.flight_price_band && (
+                  <ProvenanceBadge prov={prov.flight_price_band} fieldLabel="מחיר טיסה" />
+                )}
+              </span>
             )}
           </dd>
         </div>

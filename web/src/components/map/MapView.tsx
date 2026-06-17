@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -18,6 +18,7 @@ import {
 } from "./encodings";
 import {
   fetchDestinations,
+  regionOptions,
   REVEAL_STEP,
   type Destination,
   type DestinationsResponse,
@@ -40,6 +41,24 @@ function destFeatureCollection(dests: Destination[]) {
       properties: { slug: d.slug, name_he: d.name_he, site_type: d.site_type ?? "" },
     })),
   };
+}
+
+// Frame a set of destination pins. Pads the panel side (RTL: physical left) so pins stay
+// clear of the funnel. Shared by the initial drill and by region-filter changes (the pin
+// set follows the active filter, so the framing should too).
+function fitToDestinations(map: maplibregl.Map, dests: Destination[]) {
+  if (!dests.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const d of dests) {
+    minX = Math.min(minX, d.lng);
+    maxX = Math.max(maxX, d.lng);
+    minY = Math.min(minY, d.lat);
+    maxY = Math.max(maxY, d.lat);
+  }
+  map.fitBounds(
+    [[minX, minY], [maxX, maxY]],
+    { padding: { top: 70, bottom: 70, left: 380, right: 70 }, duration: 1600, maxZoom: 7 }
+  );
 }
 
 // MapLibre/WebGL does NOT apply bidi/RTL shaping to glyphs on its own, so Hebrew on-map
@@ -84,6 +103,8 @@ export default function MapView() {
   // Drill funnel: which country we're exploring, its destinations, and how many are revealed.
   const [drillRef, setDrillRef] = useState<string | null>(null);
   const [destData, setDestData] = useState<DestinationsResponse | null>(null);
+  // Region filter (null = הכל). Filters the funnel + pins; not a forced step.
+  const [activeRegion, setActiveRegion] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(REVEAL_STEP);
   const [drillLoading, setDrillLoading] = useState(false);
   const [drillError, setDrillError] = useState<string | null>(null);
@@ -93,6 +114,13 @@ export default function MapView() {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; name: string; value: string } | null>(
     null
   );
+
+  // Region chips derived from the loaded set; the filtered list drives both cards and pins.
+  const regions = useMemo(() => regionOptions(destData?.destinations ?? []), [destData]);
+  const filteredDests = useMemo(() => {
+    const all = destData?.destinations ?? [];
+    return activeRegion ? all.filter((d) => d.region_label === activeRegion) : all;
+  }, [destData, activeRegion]);
 
   // init once
   useEffect(() => {
@@ -332,21 +360,22 @@ export default function MapView() {
     }
   }, [metric]);
 
-  // Reveal effect: keep the pins in sync with the revealed (classic-first) destinations, so
-  // pins and the card list grow together on each "עוד".
+  // Reveal effect: keep the pins in sync with the revealed (classic-first) destinations of
+  // the ACTIVE region filter, so pins and the card list grow together on each "עוד" and both
+  // respect the active filter.
   useEffect(() => {
     const map = mapRef.current;
     const src = map?.getSource("destinations") as maplibregl.GeoJSONSource | undefined;
     if (!src) return;
-    const visible = (destData?.destinations ?? []).slice(0, revealed);
-    src.setData(destFeatureCollection(visible));
-  }, [destData, revealed, ready]);
+    src.setData(destFeatureCollection(filteredDests.slice(0, revealed)));
+  }, [filteredDests, revealed, ready]);
 
   // Enter the drill funnel for a country: load its destinations, frame them on the map,
   // and open the panel. Clears the country card so the panel takes over.
   async function handleDrill(ref: string) {
     setSelectedRef(null);
     setDrillRef(ref);
+    setActiveRegion(null); // funnel always opens on הכל / classic-first
     setRevealed(REVEAL_STEP);
     setDrillLoading(true);
     setDrillError(null);
@@ -354,20 +383,7 @@ export default function MapView() {
       const data = await fetchDestinations(ref);
       setDestData(data);
       const map = mapRef.current;
-      if (map && data.destinations.length) {
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const d of data.destinations) {
-          minX = Math.min(minX, d.lng);
-          maxX = Math.max(maxX, d.lng);
-          minY = Math.min(minY, d.lat);
-          maxY = Math.max(maxY, d.lat);
-        }
-        // Pad the panel side (RTL: the panel sits on the physical left) so pins stay clear.
-        map.fitBounds(
-          [[minX, minY], [maxX, maxY]],
-          { padding: { top: 70, bottom: 70, left: 380, right: 70 }, duration: 1600, maxZoom: 7 }
-        );
-      }
+      if (map) fitToDestinations(map, data.destinations);
     } catch (e) {
       setDrillError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -375,9 +391,21 @@ export default function MapView() {
     }
   }
 
+  // Region chip change: narrow (or restore) the funnel + pins, reset the reveal to the first
+  // classic-first tier, and reframe the map to the now-visible pins.
+  function handleRegionChange(region: string | null) {
+    setActiveRegion(region);
+    setRevealed(REVEAL_STEP);
+    const all = destData?.destinations ?? [];
+    const next = region ? all.filter((d) => d.region_label === region) : all;
+    const map = mapRef.current;
+    if (map) fitToDestinations(map, next);
+  }
+
   function closeDrill() {
     setDrillRef(null);
     setDestData(null);
+    setActiveRegion(null);
     const src = mapRef.current?.getSource("destinations") as maplibregl.GeoJSONSource | undefined;
     src?.setData({ type: "FeatureCollection", features: [] });
   }
@@ -404,12 +432,15 @@ export default function MapView() {
       {drillRef && (
         <DestinationPanel
           countryNameHe={destData?.country.name_he ?? ""}
-          destinations={destData?.destinations ?? []}
+          destinations={filteredDests}
           revealed={revealed}
-          total={destData?.total ?? 0}
+          total={filteredDests.length}
+          regions={regions}
+          activeRegion={activeRegion}
+          onRegionChange={handleRegionChange}
           loading={drillLoading}
           error={drillError}
-          onReveal={() => setRevealed((r) => Math.min(r + REVEAL_STEP, destData?.total ?? r))}
+          onReveal={() => setRevealed((r) => Math.min(r + REVEAL_STEP, filteredDests.length))}
           onOpen={(ref) => setSelectedRef(ref)}
           onClose={closeDrill}
         />

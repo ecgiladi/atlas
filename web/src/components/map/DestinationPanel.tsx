@@ -3,17 +3,21 @@
 import { ChevronDown, X } from "lucide-react";
 
 import DestinationCard from "./DestinationCard";
-import type { Destination } from "./destinations";
+import RegionFilter from "./RegionFilter";
+import type { Destination, RegionOption } from "./destinations";
 import styles from "./DestinationPanel.module.css";
 
 // The drill funnel panel: classic-first destination cards, revealed a tier (3) at a time,
-// synced with the map pins. Region labels annotate each card (they don't navigate). Tapping
-// a card opens that destination's full place-card.
+// synced with the map pins. Region chips filter the funnel (default = הכל); region labels
+// also annotate each card. Tapping a card opens that destination's full place-card.
 export default function DestinationPanel({
   countryNameHe,
   destinations,
   revealed,
   total,
+  regions,
+  activeRegion,
+  onRegionChange,
   loading,
   error,
   onReveal,
@@ -21,9 +25,12 @@ export default function DestinationPanel({
   onClose,
 }: {
   countryNameHe: string;
-  destinations: Destination[];
+  destinations: Destination[]; // already filtered by the active region
   revealed: number;
-  total: number;
+  total: number; // total within the active filter
+  regions: RegionOption[];
+  activeRegion: string | null;
+  onRegionChange: (value: string | null) => void;
   loading: boolean;
   error: string | null;
   onReveal: () => void;
@@ -41,6 +48,8 @@ export default function DestinationPanel({
           <X size={20} aria-hidden />
         </button>
       </header>
+
+      <RegionFilter regions={regions} active={activeRegion} onChange={onRegionChange} />
 
       {loading && destinations.length === 0 && <p className={styles.status}>טוען יעדים…</p>}
       {error && (

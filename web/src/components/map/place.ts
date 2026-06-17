@@ -28,6 +28,7 @@ export interface PlaceDetail {
   destination_count?: number;
 
   cost_vs_israel: number | null;
+  daily_budget: number | null;
   price_night: number | null;
   price_meal: number | null;
   visa_status: string | null;
@@ -89,7 +90,11 @@ function formatHeDate(iso: string): string | null {
 function hebrewMethod(note: string | null): string | null {
   if (!note) return null;
   if (note.includes("haversine") || note.includes("TLV")) {
-    return 'מרחק אווירי: נתב״ג ← מרכז המדינה';
+    // City-level flight time is computed to the destination's real coords (refines the
+    // coarse country-centroid macro number); the country figure is the centroid.
+    return note.includes("city") || note.includes("destination")
+      ? 'מרחק אווירי: נתב״ג ← היעד'
+      : 'מרחק אווירי: נתב״ג ← מרכז המדינה';
   }
   return note.replace(/^computed:\s*/i, "");
 }
@@ -133,4 +138,25 @@ export function flightBandHe(min: number | null): string {
   if (min < 360) return "בינוני";
   if (min < 600) return "ארוך";
   return "ארוך מאוד";
+}
+
+// Whether a value is a soft estimate ("הערכה") vs computed/sourced — drives the distinct
+// styling so a guessed ₪ figure never reads as a documented fact.
+export function isEstimate(p: Provenance | null | undefined): boolean {
+  return !!p && describeProvenance(p).kind === "estimate";
+}
+
+// Flight price band -> Hebrew. The band is a soft estimate (a hand-off to Google Flights
+// later), so it pairs with the "הערכה" badge.
+export function flightPriceBandHe(band: string | null): string | null {
+  if (band === "low") return "זול";
+  if (band === "mid") return "בינוני";
+  if (band === "high") return "יקר";
+  return null;
+}
+
+// ₪ figure with a unit suffix, RTL-friendly (e.g. "₪320 ליום").
+export function shekelPer(amount: number | null, unitHe: string): string | null {
+  if (amount == null) return null;
+  return `₪${amount} ${unitHe}`;
 }
