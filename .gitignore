@@ -16,6 +16,7 @@ node_modules/
 out/
 *.tsbuildinfo
 next-env.d.ts
+.pnpm-store/
 
 # lockfiles we don't pin yet (generated on first install)
 # (uv.lock / pnpm-lock.yaml are committed once generated)

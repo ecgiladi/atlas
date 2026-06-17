@@ -7,6 +7,11 @@
 .map {
   position: absolute;
   inset: 0;
+  /* Space behind the globe: the MapLibre canvas is transparent outside the sphere, so this
+     deep night-navy radial reads as sky/space at world zoom — a little luminosity behind the
+     globe for depth, not pure black. Once you drill into a region the flat ocean layer fills
+     the viewport and covers it, so the flat map looks unchanged. */
+  background: radial-gradient(circle at 50% 44%, #3a4a66 0%, #25324c 68%);
 }
 
 .tooltip {
@@ -66,4 +71,31 @@
   color: var(--atlas-text-muted);
   font-size: 14px;
   max-width: 32ch;
+}
+
+/* Region-only affordance: zoom back out to the globe / world view (level 0). Top-center,
+   clear of the zoom control (top-left), metric toggle (top-right) and legend (bottom). */
+.backToGlobe {
+  position: absolute;
+  top: var(--atlas-space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border: none;
+  border-radius: var(--atlas-radius);
+  background: var(--atlas-surface);
+  color: var(--atlas-text);
+  font-family: var(--atlas-font);
+  font-size: 14px;
+  box-shadow: var(--atlas-shadow);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.backToGlobe:hover {
+  background: var(--atlas-surface-2);
 }
