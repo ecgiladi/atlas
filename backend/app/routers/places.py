@@ -201,7 +201,15 @@ async def get_destinations(
     src_ids = [c.id for c in children] + [country.id] + [a.id for a in country_ancestors]
     src_by_key = await _load_sources(session, src_ids)
 
-    items = [_build_payload(c, ancestors_for_child, src_by_key) for c in children]
+    # cost_vs_israel is a macro/country index — meaningless at the city level, where the
+    # cost language is absolute ₪ (daily_budget / price_night). Drop it from the
+    # destination payload so a city never carries the (possibly inherited) country index.
+    items = []
+    for c in children:
+        payload = _build_payload(c, ancestors_for_child, src_by_key)
+        payload.pop("cost_vs_israel", None)
+        payload["provenance"].pop("cost_vs_israel", None)
+        items.append(payload)
     total = len(items)
     if offset or limit is not None:
         items = items[offset : (offset + limit) if limit is not None else None]

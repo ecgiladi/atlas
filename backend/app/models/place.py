@@ -82,7 +82,11 @@ class Place(UUIDMixin, TimestampMixin, Base):
     )  # months 1..12
     climate: Mapped[Optional[Climate]] = mapped_column(SAEnum(Climate, name="climate"))
     cost_vs_israel: Mapped[Optional[int]] = mapped_column(SmallInteger)  # Israel = 100
-    price_night: Mapped[Optional[int]] = mapped_column(Integer)  # ILS
+    # Absolute ₪ figures — the city/destination cost language (cost_vs_israel is a
+    # macro/country index, meaningless at city level). daily_budget = on-the-ground daily
+    # living spend (food + local transport + incidentals, excl. lodging).
+    daily_budget: Mapped[Optional[int]] = mapped_column(Integer)  # ILS / day
+    price_night: Mapped[Optional[int]] = mapped_column(Integer)  # ILS / night
     price_meal: Mapped[Optional[int]] = mapped_column(Integer)  # ILS
     flight_from_tlv_minutes: Mapped[Optional[int]] = mapped_column(Integer)
     flight_direct: Mapped[Optional[bool]] = mapped_column(Boolean)

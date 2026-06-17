@@ -17,6 +17,7 @@ from typing import Any, Iterable, Optional
 # culture/history context).
 INHERITABLE_FIELDS: tuple[str, ...] = (
     "cost_vs_israel",
+    "daily_budget",
     "price_night",
     "price_meal",
     "flight_from_tlv_minutes",
