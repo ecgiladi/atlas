@@ -68,11 +68,59 @@ function pinFeatureCollection(favs: FavoriteEntry[]) {
   return { type: "FeatureCollection" as const, features };
 }
 
-// Build a teardrop map-pin as an SDF image for the saved-place symbol layer. It's the
-// Material "place" glyph in a 24x24 viewBox — a classic balloon, point at the BOTTOM, with
-// a round inner hole (even-odd fill). We crop the canvas height to the tip (y=22) so
-// icon-anchor:'bottom' lands the TIP exactly on the coordinate. SDF = only the alpha channel
-// is read; icon-color tints per feature (status). Rendered at scale for crisp edges.
+// 1-D squared Euclidean distance transform (Felzenszwalb & Huttenlocher) — the kernel of the
+// 2-D EDT used to turn the rasterized pin into a real signed-distance field (below).
+function edt1d(f: Float64Array, n: number): Float64Array {
+  const d = new Float64Array(n);
+  const v = new Int32Array(n);
+  const z = new Float64Array(n + 1);
+  let k = 0;
+  v[0] = 0;
+  z[0] = -Infinity;
+  z[1] = Infinity;
+  for (let q = 1; q < n; q++) {
+    let s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    while (s <= z[k]) {
+      k--;
+      s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    }
+    k++;
+    v[k] = q;
+    z[k] = s;
+    z[k + 1] = Infinity;
+  }
+  k = 0;
+  for (let q = 0; q < n; q++) {
+    while (z[k + 1] < q) k++;
+    d[q] = (q - v[k]) * (q - v[k]) + f[v[k]];
+  }
+  return d;
+}
+function edt2d(grid: Float64Array, w: number, h: number) {
+  const f = new Float64Array(Math.max(w, h));
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) f[y] = grid[y * w + x];
+    const d = edt1d(f, h);
+    for (let y = 0; y < h; y++) grid[y * w + x] = d[y];
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) f[x] = grid[y * w + x];
+    const d = edt1d(f, w);
+    for (let x = 0; x < w; x++) grid[y * w + x] = d[x];
+  }
+}
+
+// Build a teardrop map-pin as a true SDF image for the saved-place symbol layer. It's the
+// Material "place" glyph in a 24x24 viewBox — a classic balloon, point at the BOTTOM, with a
+// round inner hole (even-odd fill). We crop the canvas height to the tip (y=22) so
+// icon-anchor:'bottom' lands the TIP exactly on the coordinate.
+//
+// SDF (not a plain alpha mask): rasterize the glyph, then encode each pixel's *signed
+// distance* to the silhouette edge into the alpha channel (Mapbox/TinySDF convention: edge at
+// ~191, inside→255, outside→0). Only the alpha is read; icon-color tints per status and — the
+// reason we need a real distance field — icon-halo paints a clean white rim that expands into
+// the field, so green/red/amber stay legible over ANY metric fill (incl. the saturated end of
+// the cost diverging ramp). A binary mask can't do this: the halo has no distance to grow into.
 const SAVED_PIN_IMG = "saved-pin";
 const SAVED_PIN_PATH =
   "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z";
@@ -88,9 +136,34 @@ function makePinImage(scale = 4): { width: number; height: number; data: Uint8Cl
   if (!ctx) return null;
   ctx.scale(scale, scale);
   const path = new Path2D(SAVED_PIN_PATH);
-  ctx.fillStyle = "#000"; // RGB irrelevant for SDF — MapLibre reads alpha; icon-color does the tint
-  ctx.fill(path, "evenodd"); // even-odd -> the inner circle punches a transparent hole
-  return { width: w, height: h, data: ctx.getImageData(0, 0, w, h).data };
+  ctx.fillStyle = "#000";
+  ctx.fill(path, "evenodd"); // even-odd -> the inner circle is "outside" too -> a real hole
+
+  // Rasterized silhouette -> signed distance field encoded into alpha.
+  const raster = ctx.getImageData(0, 0, w, h).data;
+  const INF = 1e20;
+  const outer = new Float64Array(w * h); // dist^2 from outside pixels to nearest inside
+  const inner = new Float64Array(w * h); // dist^2 from inside pixels to nearest outside
+  for (let i = 0; i < w * h; i++) {
+    const isInside = raster[i * 4 + 3] > 127; // alpha of the rasterized glyph
+    outer[i] = isInside ? 0 : INF;
+    inner[i] = isInside ? INF : 0;
+  }
+  edt2d(outer, w, h);
+  edt2d(inner, w, h);
+  // radius = halo budget in base px (after icon-size it becomes the on-screen halo headroom).
+  const radius = 2 * scale;
+  const cutoff = 0.25; // edge sits at alpha = 255*(1-cutoff) ≈ 191 (matches MapLibre's SDF buffer)
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    const d = Math.sqrt(outer[i]) - Math.sqrt(inner[i]); // +outside, -inside (signed distance)
+    const a = 255 - 255 * (d / radius + cutoff); // clamping handled by Uint8ClampedArray
+    out[i * 4] = 255;
+    out[i * 4 + 1] = 255;
+    out[i * 4 + 2] = 255;
+    out[i * 4 + 3] = a;
+  }
+  return { width: w, height: h, data: out };
 }
 
 // Reuse the one-point-per-feature pattern (from the label-points work): destinations are
@@ -472,9 +545,12 @@ export default function MapView() {
             "shortlist", PIN_COLOR_SHORTLIST,
             "#6b747d", // fallback (unknown status)
           ],
-          // White rim so a colored pin reads on the planet palette (mirrors the old stroke).
+          // White rim so a colored pin reads over ANY fill — the planet palette in world, and
+          // the metric choropleth in region (incl. the cost ramp's saturated red end, where the
+          // red pin is closest in hue). Real SDF (above) makes this halo actually render; ~1.8px
+          // stays within the field's halo budget (radius * icon-size). Tunable on device.
           "icon-halo-color": "#ffffff",
-          "icon-halo-width": 1.4,
+          "icon-halo-width": 1.8,
         },
       });
       // Tap a saved pin -> open its PlaceCard (same path as a destination pin / region click).
@@ -590,10 +666,11 @@ export default function MapView() {
       map.on("click", "country-fill", (e) => {
         if (!e.features?.length) return;
         const id = e.features[0].id as string; // iso3 (== promoteId)
+        // Saved-place pins sit above the fill in BOTH world and region; if one is under the
+        // click, let its own handler open the card instead of drilling / opening the country
+        // card beneath it. (Hidden in the funnel, so this is a no-op there.)
+        if (map.queryRenderedFeatures(e.point, { layers: ["pins"] }).length) return;
         if (modeRef.current === "world") {
-          // A saved-place pin sits above the fill in world mode; if one is under the click,
-          // let its own handler open the card instead of drilling into the country.
-          if (map.queryRenderedFeatures(e.point, { layers: ["pins"] }).length) return;
           // On the globe, a click DRILLS IN: fly to the country's bounds. Crossing the
           // zoom threshold flips to region mode (choropleth + toggle) and the adaptive
           // projection morphs globe -> flat. Clamp zoom so even large countries enter region.
@@ -668,21 +745,25 @@ export default function MapView() {
     }
   }, [metric, mode]);
 
-  // Pin visibility by mode — the two pin sets never co-show, keeping each to its scope:
-  //   - saved-place pins ("pins") are the GLOBE overlay -> visible in world mode only.
-  //   - destination pins ("destination-pins"/labels) belong to the funnel (a deeper state
-  //     off region) -> visible only while a country's funnel is open (drillRef set). Their
-  //     data is also cleared on close, so this is belt-and-suspenders against stragglers.
+  // Pin visibility by mode/funnel — the two pin sets never co-show, keeping each to its scope:
+  //   - saved-place pins ("pins") are the personal overlay -> visible in WORLD + REGION (they
+  //     stay pinned over the choropleth), but HIDDEN while the destinations funnel is open so
+  //     they don't double up with the funnel's own pins (destination pins own the funnel).
+  //   - destination pins ("destination-pins"/labels) belong to the funnel (a deeper state off
+  //     region) -> visible only while a country's funnel is open (drillRef set). Their data is
+  //     also cleared on close, so this is belt-and-suspenders against stragglers.
+  // SAVED_PINS_IN_FUNNEL: one-line flip — set true to also show saved pins inside the funnel.
+  const SAVED_PINS_IN_FUNNEL = false;
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const setVis = (id: string, visible: boolean) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
     };
-    setVis("pins", mode === "world");
+    setVis("pins", SAVED_PINS_IN_FUNNEL || drillRef == null);
     setVis("destination-pins", drillRef != null);
     setVis("destination-pin-labels", drillRef != null);
-  }, [mode, drillRef, ready]);
+  }, [drillRef, ready]);
 
   // "חזרה לעולם" (region-back -> globe). Collapse any open funnel first so we never land on
   // the globe with the destination panel/pins still up — the back stack is funnel -> region
