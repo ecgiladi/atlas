@@ -68,6 +68,31 @@ function pinFeatureCollection(favs: FavoriteEntry[]) {
   return { type: "FeatureCollection" as const, features };
 }
 
+// Build a teardrop map-pin as an SDF image for the saved-place symbol layer. It's the
+// Material "place" glyph in a 24x24 viewBox — a classic balloon, point at the BOTTOM, with
+// a round inner hole (even-odd fill). We crop the canvas height to the tip (y=22) so
+// icon-anchor:'bottom' lands the TIP exactly on the coordinate. SDF = only the alpha channel
+// is read; icon-color tints per feature (status). Rendered at scale for crisp edges.
+const SAVED_PIN_IMG = "saved-pin";
+const SAVED_PIN_PATH =
+  "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z";
+function makePinImage(scale = 4): { width: number; height: number; data: Uint8ClampedArray } | null {
+  const VB_W = 24;
+  const TIP_Y = 22; // path's lowest point (the tip), at x=12 -> crop here so anchor:'bottom' = tip
+  const w = Math.round(VB_W * scale);
+  const h = Math.round(TIP_Y * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.scale(scale, scale);
+  const path = new Path2D(SAVED_PIN_PATH);
+  ctx.fillStyle = "#000"; // RGB irrelevant for SDF — MapLibre reads alpha; icon-color does the tint
+  ctx.fill(path, "evenodd"); // even-odd -> the inner circle punches a transparent hole
+  return { width: w, height: h, data: ctx.getImageData(0, 0, w, h).data };
+}
+
 // Reuse the one-point-per-feature pattern (from the label-points work): destinations are
 // points of the same shape, so they ride a geojson Point source + circle/label layers.
 function destFeatureCollection(dests: Destination[]) {
@@ -416,15 +441,30 @@ export default function MapView() {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
+      // Register the teardrop pin once (SDF -> tintable per-feature via icon-color).
+      if (!map.hasImage(SAVED_PIN_IMG)) {
+        const pinImg = makePinImage();
+        if (pinImg) map.addImage(SAVED_PIN_IMG, pinImg, { sdf: true });
+      }
       map.addLayer({
         id: "pins",
-        type: "circle",
+        type: "symbol",
         source: "pins",
+        layout: {
+          "icon-image": SAVED_PIN_IMG,
+          // icon-anchor:'bottom' -> the TIP sits on the exact coordinate (the canvas is
+          // cropped to the tip). allow-overlap + ignore-placement: never drop a personal pin.
+          "icon-anchor": "bottom",
+          "icon-size": 0.34,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          // On the globe, keep pins upright / billboarded (don't tilt with the camera or
+          // lie flat on the sphere) — they read as map markers planted on the planet.
+          "icon-rotation-alignment": "viewport",
+          "icon-pitch-alignment": "viewport",
+        },
         paint: {
-          "circle-radius": 6,
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#ffffff",
-          "circle-color": [
+          "icon-color": [
             "match",
             ["get", "status"],
             "been", PIN_COLOR_BEEN,
@@ -432,6 +472,9 @@ export default function MapView() {
             "shortlist", PIN_COLOR_SHORTLIST,
             "#6b747d", // fallback (unknown status)
           ],
+          // White rim so a colored pin reads on the planet palette (mirrors the old stroke).
+          "icon-halo-color": "#ffffff",
+          "icon-halo-width": 1.4,
         },
       });
       // Tap a saved pin -> open its PlaceCard (same path as a destination pin / region click).
