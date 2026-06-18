@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Compass, Home, X } from "lucide-react";
+import { Check, Compass, Home, Plus, X } from "lucide-react";
 
 import { VISA_COLORS, visaLabelHe } from "./encodings";
+import { type CompareItem } from "./compare";
 import ProvenanceBadge from "./ProvenanceBadge";
 import SaveControl from "./SaveControl";
 import { flightBandHe, levelLabelHe, type PlaceDetail } from "./place";
@@ -17,6 +18,9 @@ export default function PlaceCard({
   favVersion,
   onFavChanged,
   onClose,
+  inCompare,
+  compareFull,
+  onToggleCompare,
 }: {
   placeRef: string | null;
   // Drill into a country's destinations (shown only when the country has any). Optional so
@@ -25,6 +29,9 @@ export default function PlaceCard({
   favVersion: number;
   onFavChanged: () => void;
   onClose: () => void;
+  inCompare: boolean;
+  compareFull: boolean;
+  onToggleCompare: (item: CompareItem) => void;
 }) {
   const [place, setPlace] = useState<PlaceDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -80,6 +87,22 @@ export default function PlaceCard({
           favVersion={favVersion}
           onFavChanged={onFavChanged}
         />
+      )}
+
+      {/* הוסף להשוואה — the card add-path into the compare tray (the building-mode map-tap is
+          the other path). Country-level only (iso3 is the compare ref); disabled when the tray
+          is already full unless this place is in it (then it toggles off). */}
+      {place && place.iso3 && (
+        <button
+          type="button"
+          className={styles.compareAction}
+          disabled={compareFull && !inCompare}
+          onClick={() => onToggleCompare({ ref: place.iso3!, name_he: place.name_he })}
+          data-testid="compare-add"
+        >
+          {inCompare ? <Check size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
+          {inCompare ? "הסר מהשוואה" : "הוסף להשוואה"}
+        </button>
       )}
     </aside>
   );

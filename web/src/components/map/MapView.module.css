@@ -144,3 +144,37 @@
 .favFab:hover {
   background: var(--atlas-surface-2);
 }
+
+/* Building-mode toggle — sits just under the favorites FAB, same top-right rail. */
+.compareToggle {
+  position: absolute;
+  top: calc(var(--atlas-space-4) + 56px);
+  right: var(--atlas-space-4);
+  z-index: 25; /* same rail as favFab, above the place card */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: var(--atlas-surface);
+  color: var(--atlas-accent);
+  box-shadow: var(--atlas-shadow);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.compareToggle:hover {
+  background: var(--atlas-surface-2);
+}
+
+/* Active = we're in building mode: filled accent so the mode is unmistakable. */
+.compareToggleActive {
+  background: var(--atlas-accent);
+  color: #fff;
+}
+
+.compareToggleActive:hover {
+  background: var(--atlas-accent);
+}

@@ -1,0 +1,148 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: var(--atlas-surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--atlas-space-4) var(--atlas-space-5);
+  border-bottom: 1px solid var(--atlas-line);
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--atlas-text-muted);
+  padding: var(--atlas-space-1);
+  border-radius: var(--atlas-radius-sm);
+  display: inline-flex;
+}
+
+.close:hover {
+  background: var(--atlas-surface-2);
+}
+
+.status {
+  padding: var(--atlas-space-5);
+  font-size: 15px;
+  color: var(--atlas-text-muted);
+}
+
+.scroll {
+  flex: 1;
+  overflow: auto;
+  padding: var(--atlas-space-4);
+}
+
+.table {
+  /* separate (NOT collapse): position:sticky on table cells is broken under
+     border-collapse:collapse in Blink/WebKit — the sticky axis column mis-positions and
+     overlaps the adjacent place column, clipping the start (right, in RTL) of its content
+     (header cut, "ויזה" bare, flight band word gone). Separate + border-spacing:0 fixes it;
+     cell borders are drawn per-cell below so the grid still reads as one ruled table. */
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  min-width: min-content;
+}
+
+/* Axis-label column: sticky to the inline-start (right edge in RTL) during h-scroll. z-index
+   above the cells (auto=0) so scrolled place columns pass UNDER it; opaque bg covers them; a
+   logical inline-end border (left edge in RTL) is the crisp seam toward the scrolling content
+   so the adjacent place column is never visually fused/overlapped. */
+.axisHead {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+  background: var(--atlas-surface);
+  text-align: start;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--atlas-text);
+  padding: var(--atlas-space-3) var(--atlas-space-3);
+  border-bottom: 1px solid var(--atlas-line);
+  border-inline-end: 1px solid var(--atlas-line);
+  white-space: nowrap;
+}
+
+.axisHeadMuted {
+  color: var(--atlas-text-muted);
+  font-weight: 500;
+}
+
+.cornerCell {
+  background: var(--atlas-surface);
+}
+
+.placeHead {
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border-bottom: 1px solid var(--atlas-line);
+  min-width: 120px;
+}
+
+.placeName {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--atlas-accent);
+  padding: 0;
+}
+
+.placeName:hover {
+  text-decoration: underline;
+}
+
+.cell {
+  padding: var(--atlas-space-3);
+  border-bottom: 1px solid var(--atlas-line);
+  font-size: 15px;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.winner {
+  font-weight: 700;
+  color: var(--atlas-accent);
+}
+
+.check {
+  vertical-align: -2px;
+  margin-inline-end: var(--atlas-space-1);
+}
+
+.cellMuted {
+  color: var(--atlas-text-muted);
+}
+
+.upcomingDivider .axisHead {
+  padding-top: var(--atlas-space-4);
+  color: var(--atlas-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.upcomingNote {
+  padding: var(--atlas-space-4) var(--atlas-space-3) var(--atlas-space-2);
+  font-size: 12px;
+  color: var(--atlas-text-muted);
+  text-align: start;
+}
+
+.upcomingRow .cell {
+  font-size: 14px;
+}

@@ -1,9 +1,12 @@
-"""Place detail + destination-tier endpoints — the templated place card feed.
+"""Place detail + destination-tier + compare endpoints — the templated place card feed.
 
 GET /api/places/{ref}                      -> one place, every axis + per-field provenance.
 GET /api/places/{country_ref}/destinations -> a country's destination-tier children
                                               (level=city), ordered classic-first, each in
                                               the SAME template shape (the consolidated format).
+
+GET /api/places/compare?refs=JP,TH,GE returns an array of that same detail shape (2-3
+places) — the compare view computes per-axis winners client-side.
 
 Inheritance: inheritable axes resolve through the parent chain (city -> country ->
 continent) via app.inheritance, so a destination with a NULL cost shows the country's
@@ -226,6 +229,30 @@ async def get_destinations(
         "offset": offset,
         "destinations": items,
     }
+# NOTE: declared BEFORE "/{ref}" so the literal path wins over the catch-all param.
+@router.get("/compare")
+async def compare_places(
+    refs: str = Query(..., description="2-3 comma-separated iso3/slug refs"),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """Batch detail for the compare view: array of the /{ref} shape, in request order."""
+    wanted = [r.strip() for r in refs.split(",") if r.strip()]
+    if not (2 <= len(wanted) <= 3):
+        raise HTTPException(
+            status_code=400,
+            detail="compare needs 2-3 refs, got " + str(len(wanted)),
+        )
+    details: list[dict] = []
+    for ref in wanted:
+        place = await _resolve_place(session, ref)
+        if place is None:
+            raise HTTPException(status_code=404, detail=f"place not found: {ref!r}")
+        # Reuse the shared template assembly (same shape as GET /{ref}) per place.
+        ancestors = await _load_ancestors(session, place)
+        place_ids = [place.id, *(a.id for a in ancestors)]
+        src_by_key = await _load_sources(session, place_ids)
+        details.append(_build_payload(place, ancestors, src_by_key))
+    return details
 
 
 @router.get("/{ref}")

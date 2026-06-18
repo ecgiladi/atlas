@@ -2,10 +2,10 @@
 
 **Personal, Hebrew-RTL, map-first travel discovery & comparison tool for an Israeli traveler.**
 
-Last updated: 2026-06-17 · Status: **globe world-view frame is the `master` baseline**
-(private remote `git@github.com:ecgiladi/atlas.git`). Next: rebase feature branches onto it.
+Last updated: 2026-06-18 · Status: **integration pass complete — globe pins + compare folded
+onto `master`** (private remote `git@github.com:ecgiladi/atlas.git`). Next: MICRO enrichment.
 
-### Integration state (2026-06-17)
+### Integration state (2026-06-18)
 - **`master` = the globe frame baseline.** Merged `feat/globe` (`--no-ff`, clean): MapLibre
   GL JS **v5 globe projection** world-view home → drill-down morphs to the **flat region
   choropleth**, a **one-label-per-country** dedicated point source (`country_label_points.geojson`,
@@ -22,10 +22,16 @@ Last updated: 2026-06-17 · Status: **globe world-view frame is the `master` bas
     is not a separate polygon at 110m.
   - `feat/favorites` — folded in (saved_place CRUD, SaveControl on the PlaceCard AND the
     funnel DestinationCard, FavoritesSheet, on-map saved-country outline, favFab top-right).
-    `GET /api/favorites` now returns geo (lat/lng). The `pins` layer stays scaffolded
-    (empty) for the personal-globe overlay — populated in step D.
-- **Unmerged — rebase onto `master` next:**
-  - `feat/compare` — compare view (`GET /api/places/compare` + CompareTray/CompareView).
+    `GET /api/favorites` now returns geo (lat/lng).
+  - `feat/globe-pins` — the personal-globe overlay: status-colored **teardrop SDF pins** from
+    `/api/favorites`, visible in world + region (hidden in the funnel), tap → PlaceCard.
+  - `feat/compare` — **folded this pass** (`--no-ff`). `GET /api/places/compare` batch
+    endpoint, CompareTray (chips / נקה / השווה), "הוסף להשוואה" on PlaceCard, full-screen
+    CompareView (axes × place columns, RTL sticky axis label, per-row winner highlight).
+    Building-mode is now an **explicit toggle** (Scale button, top-right rail under the favFab):
+    while active a COUNTRY tap = add-to-compare (suppresses drill/card; pins+funnel taps no-op).
+- **Unmerged:** _(none — integration pass done)_
+- **Next:** MICRO enrichment (light up the template axes that are NULL today).
 
 ---
 
@@ -202,8 +208,17 @@ Remote: PRIVATE `git@github.com:ecgiladi/atlas.git` (VPS ed25519 SSH key, accoun
    "פרטים נוספים יתווספו בהעשרה". Israel/home → baseline cost "100 · בסיס ההשוואה", no self-visa.
    Panel anchors `inset-inline-end` (left in RTL) to clear the right-side toggle + legend.
    **STOPPED before compare view** (next).
-4. **Compare view** — side-by-side within a level, over the comparison axes; sort/rank.
-   Reuses `PlaceCard` as the per-place template.
+4. **Compare view** — ✅ DONE (country level), on branch `feat/compare` (pushed, NOT merged).
+   `GET /api/places/compare?refs=…` (2-3 iso3/slug) → array of the `/{ref}` detail shape;
+   winners computed client-side. Compare TRAY (bottom bar, chips, "השווה (N)" enabled at >=2,
+   cap 3, React state — no localStorage): add via "הוסף להשוואה" in the card, and in
+   building-mode (tray non-empty) a map tap toggles a country in/out (zero-state tap still opens
+   the card). Compare VIEW (full-screen overlay): template axes as rows × places as columns, RTL
+   sticky axis-label column (right), 3-col horizontal-scroll on mobile, column-header tap opens
+   that place's card. Winner-per-row (`compare.ts`): cost/flight lower-better, visa by ordinal
+   ease; ties crown all; single-value/null = no crown ("—"); subjective axes never crown. Only
+   cost/visa/flight decide now; rest render subtly as "—". **STOPPED before saved_place/shortlist
+   + enrichment.**
 5. **Extraction pipeline (MICRO)** — Claude API + web search → extract into template with
    per-field citations; same pattern as GigaBait recipe module.
 6. **Filters** — by axis (season, cost band, flight band, safety, good_for tags, character,

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Globe2, Heart } from "lucide-react";
+import { Globe2, Heart, Scale } from "lucide-react";
 
 import MetricToggle from "./MetricToggle";
 import Legend from "./Legend";
@@ -11,6 +11,9 @@ import PlaceCard from "./PlaceCard";
 import DestinationPanel from "./DestinationPanel";
 import FavoritesSheet from "./FavoritesSheet";
 import { listFavorites, type FavoriteEntry } from "./favorites";
+import CompareTray from "./CompareTray";
+import CompareView from "./CompareView";
+import { COMPARE_CAP, type CompareItem } from "./compare";
 import {
   BORDER_COLOR,
   HOME_LINE,
@@ -297,6 +300,15 @@ export default function MapView() {
   const [favVersion, setFavVersion] = useState(0);
   const [showFavorites, setShowFavorites] = useState(false);
   const bumpFav = () => setFavVersion((v) => v + 1);
+  // Compare tray (1-3 places). trayRef mirrors it for the map click closure.
+  const [tray, setTray] = useState<CompareItem[]>([]);
+  const trayRef = useRef<CompareItem[]>([]);
+  const [comparing, setComparing] = useState(false);
+  // Building mode: an explicit toggle that turns a COUNTRY tap into add-to-compare (instead
+  // of drill/card). buildingRef mirrors it for the once-built map click closure. This is the
+  // map add-path; the PlaceCard "הוסף להשוואה" button is the other — both feed toggleTray.
+  const [buildingMode, setBuildingMode] = useState(false);
+  const buildingRef = useRef(false);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -310,6 +322,51 @@ export default function MapView() {
     const all = destData?.destinations ?? [];
     return activeRegion ? all.filter((d) => d.region_label === activeRegion) : all;
   }, [destData, activeRegion]);
+
+  // Add/remove a place in the compare tray (cap COMPARE_CAP). trayRef kept in lockstep so
+  // the map click handler (built once, in the load closure) reads the live tray.
+  const toggleTray = useCallback((item: CompareItem) => {
+    setTray((prev) => {
+      const exists = prev.some((t) => t.ref === item.ref);
+      let next: CompareItem[];
+      if (exists) next = prev.filter((t) => t.ref !== item.ref);
+      else if (prev.length >= COMPARE_CAP) next = prev; // silently ignore over-cap
+      else next = [...prev, item];
+      trayRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const removeFromTray = useCallback((ref: string) => {
+    setTray((prev) => {
+      const next = prev.filter((t) => t.ref !== ref);
+      trayRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const clearTray = useCallback(() => {
+    trayRef.current = [];
+    setTray([]);
+    setComparing(false);
+    // נקה also drops out of building mode -> normal tapping restored.
+    buildingRef.current = false;
+    setBuildingMode(false);
+  }, []);
+
+  // Building-mode toggle. Entering it collapses any open funnel/card so a country tap reads
+  // cleanly as add-to-compare; exiting restores normal world->drill / region->card tapping.
+  const toggleBuildingMode = useCallback(() => {
+    setBuildingMode((on) => {
+      const next = !on;
+      buildingRef.current = next;
+      if (next) {
+        setSelectedRef(null);
+        closeDrill();
+      }
+      return next;
+    });
+  }, []);
 
   // init once
   useEffect(() => {
@@ -554,7 +611,10 @@ export default function MapView() {
         },
       });
       // Tap a saved pin -> open its PlaceCard (same path as a destination pin / region click).
+      // In building mode, stay out of the way: the country-fill handler beneath turns the tap
+      // into add-to-compare, so the pin must not also open a card (would fight the gesture).
       map.on("click", "pins", (e) => {
+        if (buildingRef.current) return;
         if (!e.features?.length) return;
         setSelectedRef(e.features[0].properties?.ref as string);
       });
@@ -604,6 +664,7 @@ export default function MapView() {
         },
       });
       map.on("click", "destination-pins", (e) => {
+        if (buildingRef.current) return; // building mode owns the tap (see country-fill handler)
         if (!e.features?.length) return;
         setSelectedRef(e.features[0].properties?.slug as string);
       });
@@ -666,6 +727,15 @@ export default function MapView() {
       map.on("click", "country-fill", (e) => {
         if (!e.features?.length) return;
         const id = e.features[0].id as string; // iso3 (== promoteId)
+        // Building mode: a COUNTRY tap adds/removes it from the compare tray, suppressing the
+        // normal drill (world) / card (region). Only data-backed countries are comparable (a
+        // no-data polygon has no detail to fetch). Checked BEFORE the pin guard so a tap
+        // anywhere on the country — even over a saved pin — registers as add-to-compare.
+        if (buildingRef.current) {
+          const d = dataRef.current.get(id);
+          if (d) toggleTray({ ref: id, name_he: d.name_he });
+          return;
+        }
         // Saved-place pins sit above the fill in BOTH world and region; if one is under the
         // click, let its own handler open the card instead of drilling / opening the country
         // card beneath it. (Hidden in the funnel, so this is a no-op there.)
@@ -909,6 +979,17 @@ export default function MapView() {
           onClose={closeDrill}
         />
       )}
+      {/* Building-mode toggle — the clear enter/exit for compare-by-tapping. Active = a country
+          tap adds it to the tray (see the country-fill handler); off = normal tapping. */}
+      <button
+        type="button"
+        className={`${styles.compareToggle} ${buildingMode ? styles.compareToggleActive : ""}`}
+        onClick={toggleBuildingMode}
+        aria-pressed={buildingMode}
+        aria-label={buildingMode ? "צא ממצב השוואה" : "מצב השוואה"}
+      >
+        <Scale size={20} aria-hidden />
+      </button>
       {!showFavorites && (
         <button
           type="button"
@@ -925,6 +1006,9 @@ export default function MapView() {
         favVersion={favVersion}
         onFavChanged={bumpFav}
         onClose={() => setSelectedRef(null)}
+        inCompare={selectedRef != null && tray.some((t) => t.ref === selectedRef)}
+        compareFull={tray.length >= COMPARE_CAP}
+        onToggleCompare={toggleTray}
       />
       <FavoritesSheet
         open={showFavorites}
@@ -933,6 +1017,22 @@ export default function MapView() {
         onChanged={bumpFav}
         onClose={() => setShowFavorites(false)}
       />
+      <CompareTray
+        items={tray}
+        onRemove={removeFromTray}
+        onClear={clearTray}
+        onCompare={() => setComparing(true)}
+      />
+      {comparing && (
+        <CompareView
+          items={tray}
+          onClose={() => setComparing(false)}
+          onOpenCard={(ref) => {
+            setComparing(false);
+            setSelectedRef(ref);
+          }}
+        />
+      )}
     </div>
   );
 }
